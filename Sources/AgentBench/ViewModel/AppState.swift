@@ -68,6 +68,12 @@ final class AppState: ObservableObject {
     func deleteSession(_ id: String) {
         allSessions.removeAll { $0.id == id }
         Store.saveSessions(&allSessions)
+        // Also drop the session's on-disk artifacts: externalized sidecar logs and
+        // the per-lane working copies (repo copies can be large). Removing only the
+        // JSON entry would leak both under Caches/runs and Application Support/logs.
+        let fm = FileManager.default
+        try? fm.removeItem(at: Store.logsDir.appendingPathComponent(id, isDirectory: true))
+        try? fm.removeItem(at: Workspace.runsRoot.appendingPathComponent(id, isDirectory: true))
         if activeId == id { activeId = "live" }
     }
 

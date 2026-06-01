@@ -29,8 +29,16 @@ enum Workspace {
         return base
     }
 
-    private static let skipDirs: Set<String> = [".git", "node_modules", ".next", "dist",
-        "build", ".venv", "venv", "__pycache__", ".DS_Store", "target", ".turbo", ".cache"]
+    // Always derived / regenerable — safe to drop at ANY depth (monorepos nest these,
+    // e.g. packages/*/node_modules, so anchoring would miss them).
+    private static let alwaysSkipDirs: Set<String> = [".git", "node_modules", ".next",
+        ".venv", "venv", "__pycache__", ".DS_Store", ".turbo", ".cache"]
+    // Derived OUTPUT at the repo root, but also common, legitimate SOURCE directory
+    // names when nested (src/build, docs/dist, a package called target). Excluded only
+    // at the top level so we don't silently strip real source from the agent's copy.
+    private static let topLevelSkipDirs: Set<String> = ["build", "dist", "target"]
+    // Union for the recursive walk (candidate-file scan for non-git change detection).
+    private static let skipDirs: Set<String> = alwaysSkipDirs.union(topLevelSkipDirs)
 
     // Create an isolated copy (or empty scratch dir) and return its path + whether it's a git repo.
     static func prepare(repo: String, sessionId: String, lane: Int) throws -> (dir: String, isGit: Bool) {
@@ -207,7 +215,8 @@ enum Workspace {
     // Copy a tree excluding heavy derived dirs (keeps .git). Returns rsync's status.
     private static func rsyncCopy(_ src: String, _ dest: String) -> Int32 {
         var args = ["-a"]
-        for d in skipDirs.subtracting([".git"]) { args += ["--exclude", d] }
+        for d in alwaysSkipDirs.subtracting([".git"]) { args += ["--exclude", d] }   // any depth
+        for d in topLevelSkipDirs { args += ["--exclude", "/\(d)"] }                  // repo root only
         args += [src.hasSuffix("/") ? src : src + "/", dest]
         let p = Process()
         p.executableURL = URL(fileURLWithPath: "/usr/bin/rsync")

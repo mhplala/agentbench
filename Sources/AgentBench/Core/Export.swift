@@ -50,7 +50,7 @@ enum Exporter {
         for i in s.runs.indices {
             let run = s.runs[i]
             let cfg = s.configs.indices.contains(i) ? s.configs[i] : .empty
-            let base = "\(Lane.label(i))-\(AgentCatalog.spec(cfg.agentId).id)"
+            let base = "\(Lane.label(i))-\(safeName(AgentCatalog.spec(cfg.agentId).id))"
             let logName = "\(base).log"
             let full = Store.fullRawLog(run)
             if !full.isEmpty {
@@ -80,6 +80,18 @@ enum Exporter {
         // human-readable summary report
         try report(s).write(to: dir.appendingPathComponent("report.md"),
                             atomically: true, encoding: .utf8)
+    }
+
+    // Keep export filenames safe: custom agent ids (from agents.json) may contain
+    // "/" / ":" or be arbitrarily long, which would otherwise create nested paths or
+    // invalid/awkward filenames. Collapse to [A-Za-z0-9._-] and cap the length.
+    private static func safeName(_ s: String) -> String {
+        let cleaned = s.map { c -> Character in
+            ("A"..."Z").contains(c) || ("a"..."z").contains(c) || ("0"..."9").contains(c)
+                || c == "." || c == "_" || c == "-" ? c : "_"
+        }
+        let trimmed = String(String(cleaned).prefix(40))
+        return trimmed.isEmpty ? "agent" : trimmed
     }
 
     // MARK: - renderers

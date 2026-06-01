@@ -49,15 +49,23 @@ enum Judge {
         guard let v = verdictObj else {
             return Outcome(verdict: nil, error: "无法从裁判输出解析出评分 JSON。裁判最后说：\n" + String(raw.suffix(300)))
         }
-        return Outcome(verdict: makeVerdict(v, judgeLabel: label), error: nil)
+        return Outcome(verdict: makeVerdict(v, judgeLabel: label, laneCount: runs.count), error: nil)
     }
 
     // MARK: building the verdict
 
-    private static func makeVerdict(_ v: [String: Any], judgeLabel: String) -> Verdict {
+    // `laneCount` is the GROUND TRUTH lane count (runs.count). A judge — especially a
+    // non-claude one with no schema enforcement — can return score arrays of the wrong
+    // length or a winner naming a nonexistent lane. The UI derives its columns straight
+    // from these arrays (JudgeCard reads v.scores.count), so we pad/truncate every array
+    // to laneCount and coerce a bogus winner to a real lane (or tie) here, rather than
+    // letting a malformed verdict render mismatched columns.
+    private static func makeVerdict(_ v: [String: Any], judgeLabel: String, laneCount: Int) -> Verdict {
         var scores = (v["scores"] as? [Any] ?? []).map { ($0 as? Double) ?? Double(($0 as? Int) ?? 0) }
         if scores.contains(where: { $0 > 10 }) { scores = scores.map { $0 / 10 } }
         scores = scores.map { min(10, max(0, $0)) }
+        scores = fit(scores, to: laneCount, fill: 0)
+
         var crit = (v["criteria"] as? [[String: Any]] ?? []).map { c in
             Criterion(name: c.str("name") ?? "",
                       scores: (c["scores"] as? [Any] ?? []).map { ($0 as? Int) ?? Int(($0 as? Double) ?? 0) },
@@ -68,8 +76,28 @@ enum Judge {
             let scale = Double(maxCrit) / 10.0
             crit = crit.map { Criterion(name: $0.name, scores: $0.scores.map { Int((Double($0) / scale).rounded()) }, note: $0.note) }
         }
-        return Verdict(judge: judgeLabel, winner: v.str("winner") ?? "tie",
+        // every criterion must expose exactly laneCount scores so the table stays aligned
+        crit = crit.map { Criterion(name: $0.name, scores: fit($0.scores, to: laneCount, fill: 0), note: $0.note) }
+
+        // winner must name a real lane (or tie); otherwise derive it from the top score
+        let labels = (0..<max(0, laneCount)).map { Lane.label($0) }
+        var winner = v.str("winner") ?? "tie"
+        if winner != "tie" && !labels.contains(winner) {
+            if let best = scores.indices.max(by: { scores[$0] < scores[$1] }),
+               scores.filter({ $0 == scores[best] }).count == 1 {
+                winner = Lane.label(best)
+            } else {
+                winner = "tie"
+            }
+        }
+        return Verdict(judge: judgeLabel, winner: winner,
                        scores: scores, criteria: crit, rationale: v.str("rationale") ?? "")
+    }
+
+    // Pad (with `fill`) or truncate an array to exactly `n` elements.
+    private static func fit<T>(_ a: [T], to n: Int, fill: T) -> [T] {
+        if a.count == n { return a }
+        return a.count > n ? Array(a.prefix(n)) : a + Array(repeating: fill, count: n - a.count)
     }
 
     // MARK: claude structured output
