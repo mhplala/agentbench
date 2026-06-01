@@ -19,16 +19,20 @@ struct ComposeView: View {
                     .font(Theme.ui(16))
                     .scrollContentBackground(.hidden)
                     .frame(minHeight: 120)
-                    .padding(12)
-                    .panel(stroke: Theme.line3)
+                    // Placeholder overlays the editor BEFORE the outer padding, so both
+                    // share the same .padding(12); only the NSTextView's small internal
+                    // text inset (≈5 leading / ≈1 top) is matched here, keeping the
+                    // placeholder's first glyph exactly on the caret.
                     .overlay(alignment: .topLeading) {
                         if app.live.task.isEmpty {
                             Text("例如：为电商后台实现一个订单列表组件，支持搜索、分页、批量删除（React + TypeScript），并补充单元测试。")
                                 .font(Theme.ui(16)).foregroundStyle(Theme.ink3)
-                                .padding(.horizontal, 17).padding(.vertical, 20)
+                                .padding(.leading, 5).padding(.top, 1)
                                 .allowsHitTesting(false)
                         }
                     }
+                    .padding(12)
+                    .panel(stroke: Theme.line3)
 
                 // agent slots (2-4)
                 HStack(spacing: 8) {
@@ -76,6 +80,20 @@ struct ComposeView: View {
             .frame(maxWidth: .infinity)
         }
         .navigationTitle("新建对比")
+        // Compose MUST carry a system toolbar like every other detail page: on Tahoe
+        // the traffic-lights-in-sidebar look only holds while the detail has a toolbar.
+        // Navigating from a toolbar'd page (archive/settings) to a toolbar-less one
+        // collapses the unified titlebar and pops the lights back out — which is the
+        // "点新建对比侧栏就出问题" bug. A persistent run button keeps the toolbar alive.
+        .toolbar {
+            ToolbarItem(placement: .primaryAction) {
+                Button { app.runComparison() } label: {
+                    Label("运行对比", systemImage: "play.fill")
+                }
+                .help("运行对比（⌘↵）")
+                .disabled(!app.canRun())
+            }
+        }
     }
 
     private var judgeBar: some View {
