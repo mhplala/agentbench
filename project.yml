@@ -1,0 +1,40 @@
+name: AgentBench
+options:
+  bundleIdPrefix: app.agentbench
+  deploymentTarget:
+    macOS: "14.0"
+  createIntermediateGroups: true
+settings:
+  base:
+    MARKETING_VERSION: "0.1.0"
+    CURRENT_PROJECT_VERSION: "1"
+    SWIFT_VERSION: "5.0"
+    DEVELOPMENT_LANGUAGE: zh-Hans
+targets:
+  AgentBench:
+    type: application
+    platform: macOS
+    sources:
+      - path: Sources/AgentBench
+    info:
+      path: Generated/Info.plist
+      properties:
+        CFBundleName: AgentBench
+        CFBundleDisplayName: AgentBench
+        CFBundleShortVersionString: "0.1.0"
+        CFBundleVersion: "1"
+        LSMinimumSystemVersion: "14.0"
+        NSHighResolutionCapable: true
+        NSHumanReadableCopyright: "AgentBench · 模型评测工具"
+        NSAppTransportSecurity:
+          NSAllowsLocalNetworking: true
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: app.agentbench.mac
+        PRODUCT_NAME: AgentBench
+        CODE_SIGN_IDENTITY: "-"
+        CODE_SIGNING_REQUIRED: NO
+        ENABLE_HARDENED_RUNTIME: NO
+        ENABLE_APP_SANDBOX: NO
+        COMBINE_HIDPI_IMAGES: YES
+        ASSETCATALOG_COMPILER_GENERATE_ASSET_SYMBOLS: NO

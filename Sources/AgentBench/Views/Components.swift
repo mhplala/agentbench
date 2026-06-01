@@ -1,0 +1,186 @@
+import SwiftUI
+
+// MARK: formatters
+
+enum Fmt {
+    static func sec(_ ms: Int) -> String { String(format: "%.1fs", Double(ms) / 1000) }
+    static func tok(_ n: Int) -> String {
+        n >= 1000 ? String(format: "%.1fk", Double(n) / 1000) : "\(n)"
+    }
+    static func usd(_ n: Double) -> String { String(format: n < 0.1 ? "$%.3f" : "$%.2f", n) }
+}
+
+// MARK: icons (SF Symbols mapping of the prototype's stroke set)
+
+enum Sym {
+    static let map: [String: String] = [
+        "search": "magnifyingglass", "play": "play.fill", "history": "clock.arrow.circlepath",
+        "plus": "plus", "check": "checkmark", "x": "xmark", "clock": "clock",
+        "coin": "dollarsign.circle", "bolt": "bolt.fill", "ruler": "ruler",
+        "gavel": "hammer.fill", "read": "doc.text", "edit": "pencil", "terminal": "terminal",
+        "chevron": "chevron.right", "chevronD": "chevron.down", "trophy": "trophy.fill",
+        "refresh": "arrow.clockwise", "gear": "gearshape", "sidebar": "sidebar.left",
+        "brain": "brain", "expand": "arrow.up.left.and.arrow.down.right",
+        "info": "circle", "send": "arrow.right", "spark": "sparkles", "warn": "exclamationmark.triangle",
+        "browser": "safari", "globe": "globe",
+    ]
+}
+
+struct SFIcon: View {
+    let name: String
+    var size: CGFloat = 14
+    var weight: Font.Weight = .medium
+    var body: some View {
+        Image(systemName: Sym.map[name] ?? name)
+            .font(.system(size: size, weight: weight))
+    }
+}
+
+// MARK: agent identity
+
+struct AgentGlyph: View {
+    let agentId: String
+    let lane: Int
+    var box: CGFloat = 25
+    private var primary: Bool { lane == 0 }   // lane 0 filled, others outlined
+    var body: some View {
+        let spec = AgentCatalog.spec(agentId)
+        Text(spec.glyph)
+            .font(.system(size: box * 0.56))
+            .frame(width: box, height: box)
+            .background(primary ? Theme.ink : Theme.panel)
+            .foregroundStyle(primary ? .white : Theme.ink)
+            .overlay(RoundedRectangle(cornerRadius: box * 0.28)
+                .stroke(primary ? .clear : Theme.ink, lineWidth: 1.5))
+            .clipShape(RoundedRectangle(cornerRadius: box * 0.28))
+    }
+}
+
+struct AgentTag: View {
+    let agentId: String
+    let model: String
+    let lane: Int
+    var body: some View {
+        HStack(spacing: 9) {
+            AgentGlyph(agentId: agentId, lane: lane)
+            Text(AgentCatalog.spec(agentId).name)
+                .font(Theme.ui(14, .bold))
+                .foregroundStyle(Theme.ink)
+                .fixedSize()
+            if !model.isEmpty {
+                Text(model)
+                    .font(Theme.mono(11))
+                    .foregroundStyle(Theme.ink3)
+                    .padding(.horizontal, 7).padding(.vertical, 2)
+                    .background(Theme.panel2)
+                    .overlay(Capsule().stroke(Theme.line, lineWidth: 1))
+                    .clipShape(Capsule())
+                    .lineLimit(1)
+            }
+        }
+    }
+}
+
+// MARK: metric chips
+
+struct MetricChips: View {
+    let m: Metrics
+    var peers: [Metrics] = []   // all lanes' metrics; the best per metric is greened
+
+    private struct Item { let icon, key, value: String; let raw: Double; let lowerBetter: Bool }
+
+    private var items: [Item] {
+        let costVal = m.costKnown ? Fmt.usd(m.costUsd) : "—"
+        let tokPrefix = m.tokensEstimated ? "≈" : ""
+        return [
+            Item(icon: "clock", key: "延迟", value: Fmt.sec(m.latencyMs), raw: Double(m.latencyMs), lowerBetter: true),
+            Item(icon: "coin", key: "成本", value: costVal, raw: m.costUsd, lowerBetter: true),
+            Item(icon: "bolt", key: "Tokens", value: tokPrefix + Fmt.tok(m.tokensTotal), raw: Double(m.tokensTotal), lowerBetter: true),
+            Item(icon: "ruler", key: "行数", value: "\(m.lines)", raw: Double(m.lines), lowerBetter: false),
+        ]
+    }
+
+    var body: some View {
+        FlowLayout(spacing: 6) {
+            ForEach(items.indices, id: \.self) { i in
+                let it = items[i]
+                let best = isBest(it)
+                HStack(spacing: 6) {
+                    SFIcon(name: it.icon, size: 11).foregroundStyle(Theme.ink3)
+                    Text(it.key).font(Theme.ui(11.5)).foregroundStyle(Theme.ink3)
+                    Text(it.value).font(Theme.mono(12, .semibold)).foregroundStyle(best ? Theme.good : Theme.ink)
+                }
+                .padding(.horizontal, 10).padding(.vertical, 4)
+                .background(Theme.panel2)
+                .overlay(Capsule().stroke(Theme.line2, lineWidth: 1))
+                .clipShape(Capsule())
+            }
+        }
+    }
+
+    // green when this lane is uniquely the best among peers for the metric
+    private func isBest(_ it: Item) -> Bool {
+        guard peers.count >= 2 else { return false }
+        let vals: [Double] = peers.map {
+            switch it.key {
+            case "延迟": return Double($0.latencyMs)
+            case "成本": return $0.costUsd
+            case "Tokens": return Double($0.tokensTotal)
+            default: return Double($0.lines)
+            }
+        }
+        guard let target = it.lowerBetter ? vals.min() : vals.max() else { return false }
+        if vals.filter({ $0 == target }).count > 1 { return false }   // tie → no highlight
+        return it.raw == target
+    }
+}
+
+// Tiny flow layout for wrapping chips.
+struct FlowLayout: Layout {
+    var spacing: CGFloat = 6
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+        let maxW = proposal.width ?? .infinity
+        var x: CGFloat = 0, y: CGFloat = 0, rowH: CGFloat = 0
+        for v in subviews {
+            let s = v.sizeThatFits(.unspecified)
+            if x + s.width > maxW, x > 0 { x = 0; y += rowH + spacing; rowH = 0 }
+            x += s.width + spacing; rowH = max(rowH, s.height)
+        }
+        return CGSize(width: maxW == .infinity ? x : maxW, height: y + rowH)
+    }
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+        let maxW = bounds.width
+        var x: CGFloat = 0, y: CGFloat = 0, rowH: CGFloat = 0
+        for v in subviews {
+            let s = v.sizeThatFits(.unspecified)
+            if x + s.width > maxW, x > 0 { x = 0; y += rowH + spacing; rowH = 0 }
+            v.place(at: CGPoint(x: bounds.minX + x, y: bounds.minY + y), proposal: ProposedViewSize(s))
+            x += s.width + spacing; rowH = max(rowH, s.height)
+        }
+    }
+}
+
+struct Spinner: View {
+    @State private var spin = false
+    var size: CGFloat = 12
+    var body: some View {
+        Circle()
+            .trim(from: 0, to: 0.72)
+            .stroke(Theme.ink, style: StrokeStyle(lineWidth: 2, lineCap: .round))
+            .frame(width: size, height: size)
+            .rotationEffect(.degrees(spin ? 360 : 0))
+            .animation(.linear(duration: 0.7).repeatForever(autoreverses: false), value: spin)
+            .onAppear { spin = true }
+    }
+}
+
+// Small uppercase section label.
+struct BlockLabel: View {
+    let text: String
+    var body: some View {
+        Text(text)
+            .font(Theme.ui(11, .bold))
+            .tracking(1.4)
+            .foregroundStyle(Theme.ink3)
+    }
+}
