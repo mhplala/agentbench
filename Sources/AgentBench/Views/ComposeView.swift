@@ -20,10 +20,7 @@ struct ComposeView: View {
                     .scrollContentBackground(.hidden)
                     .frame(minHeight: 120)
                     .padding(12)
-                    .background(Theme.panel)
-                    .overlay(RoundedRectangle(cornerRadius: Theme.r).stroke(Theme.line3, lineWidth: 1))
-                    .clipShape(RoundedRectangle(cornerRadius: Theme.r))
-                    .cardShadow()
+                    .panel(stroke: Theme.line3)
                     .overlay(alignment: .topLeading) {
                         if app.live.task.isEmpty {
                             Text("例如：为电商后台实现一个订单列表组件，支持搜索、分页、批量删除（React + TypeScript），并补充单元测试。")
@@ -48,8 +45,9 @@ struct ComposeView: View {
                 }
                 .padding(.top, 22).padding(.bottom, 10)
 
-                // 2 lanes split evenly; 3-4 lanes scroll horizontally with a sane min
-                // width so Picker / TextField / provider-test buttons don't get crushed.
+                // 2 lanes split evenly; 3-4 lanes fall into a stable 2-column grid so
+                // each card keeps a comfortable min width instead of being crushed or
+                // pushed off-screen behind a horizontal scrollbar.
                 Group {
                     if app.live.laneCount <= 2 {
                         HStack(alignment: .top, spacing: 14) {
@@ -59,14 +57,12 @@ struct ComposeView: View {
                             }
                         }
                     } else {
-                        ScrollView(.horizontal, showsIndicators: true) {
-                            HStack(alignment: .top, spacing: 14) {
-                                ForEach(app.live.configs.indices, id: \.self) { i in
-                                    AgentSlotView(lane: i, cfg: $app.live.configs[i])
-                                        .frame(width: 300)
-                                }
+                        LazyVGrid(columns: [GridItem(.flexible(), spacing: 14),
+                                            GridItem(.flexible(), spacing: 14)],
+                                  alignment: .leading, spacing: 14) {
+                            ForEach(app.live.configs.indices, id: \.self) { i in
+                                AgentSlotView(lane: i, cfg: $app.live.configs[i])
                             }
-                            .padding(.bottom, 4)
                         }
                     }
                 }
@@ -114,10 +110,7 @@ struct ComposeView: View {
             .keyboardShortcut(.return, modifiers: .command)
         }
         .padding(.horizontal, 22).padding(.vertical, 16)
-        .background(Theme.panel)
-        .overlay(RoundedRectangle(cornerRadius: Theme.r).stroke(Theme.line, lineWidth: 1))
-        .clipShape(RoundedRectangle(cornerRadius: Theme.r))
-        .cardShadow()
+        .panel()
     }
 }
 
@@ -162,6 +155,7 @@ struct EnvBar: View {
 
 struct AgentSlotView: View {
     @EnvironmentObject var app: AppState
+    @Environment(\.density) private var density
     let lane: Int
     @Binding var cfg: AgentConfig
 
@@ -282,12 +276,9 @@ struct AgentSlotView: View {
                 .background(Theme.delBG).clipShape(RoundedRectangle(cornerRadius: Theme.rSm))
             }
         }
-        .padding(22)
+        .padding(density.cardPad + 6)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Theme.panel)
-        .overlay(RoundedRectangle(cornerRadius: Theme.r).stroke(Theme.line, lineWidth: 1))
-        .clipShape(RoundedRectangle(cornerRadius: Theme.r))
-        .cardShadow()
+        .panel()   // flat config panel, no shadow
     }
 
     @ViewBuilder private func field<C: View>(_ label: String, @ViewBuilder _ content: () -> C) -> some View {

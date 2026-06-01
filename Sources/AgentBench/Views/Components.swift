@@ -184,3 +184,114 @@ struct BlockLabel: View {
             .foregroundStyle(Theme.ink3)
     }
 }
+
+// MARK: - Unified status vocabulary
+//
+// One icon size / background / layout for every "this lane is doing X" state, so
+// the workspace doesn't read as several UI kits stitched together.
+
+enum StatusKind {
+    case running, done, failed, idle, warn
+    var color: Color {
+        switch self {
+        case .running: return Theme.ink2
+        case .done:    return Theme.good
+        case .failed:  return Theme.bad
+        case .idle:    return Theme.ink3
+        case .warn:    return Theme.bad
+        }
+    }
+    var icon: String {
+        switch self {
+        case .running: return "clock"
+        case .done:    return "check"
+        case .failed:  return "warn"
+        case .idle:    return "clock"
+        case .warn:    return "warn"
+        }
+    }
+}
+
+struct StatusPill: View {
+    let kind: StatusKind
+    let text: String
+    var spinning: Bool = false
+    var body: some View {
+        HStack(spacing: 6) {
+            if spinning { Spinner(size: 11) } else { SFIcon(name: kind.icon, size: 11) }
+            Text(text).font(Theme.mono(11.5, .semibold))
+        }
+        .foregroundStyle(kind.color)
+        .padding(.horizontal, 9).padding(.vertical, 4)
+        .background(kind.color.opacity(0.08))
+        .clipShape(Capsule())
+    }
+}
+
+// Unified empty state — same icon size, spacing, copy length everywhere.
+struct EmptyState: View {
+    let icon: String
+    let title: String
+    var message: String? = nil
+    var body: some View {
+        VStack(spacing: 7) {
+            SFIcon(name: icon, size: 20, weight: .regular).foregroundStyle(Theme.ink3)
+            Text(title).font(Theme.ui(13, .semibold)).foregroundStyle(Theme.ink2)
+            if let message {
+                Text(message).font(Theme.ui(11.5)).foregroundStyle(Theme.ink3)
+                    .multilineTextAlignment(.center)
+            }
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 28)
+    }
+}
+
+// Unified warning / call-to-action banner (untrusted preview, judge failure, …).
+struct WarningBanner: View {
+    let text: String
+    var actionLabel: String? = nil
+    var action: (() -> Void)? = nil
+    var accent: Color = Theme.ink
+    var body: some View {
+        HStack(spacing: 8) {
+            SFIcon(name: "warn", size: 12).foregroundStyle(Theme.bad)
+            Text(text).font(Theme.ui(11.5)).foregroundStyle(Theme.ink2)
+                .fixedSize(horizontal: false, vertical: true)
+            Spacer(minLength: 8)
+            if let actionLabel, let action {
+                Button(action: action) {
+                    Text(actionLabel).font(Theme.ui(11.5, .semibold)).foregroundStyle(.white)
+                        .padding(.horizontal, 10).padding(.vertical, 4)
+                        .background(accent).clipShape(Capsule())
+                }.buttonStyle(.plain)
+            }
+        }
+        .padding(.horizontal, 11).padding(.vertical, 8)
+        .background(Color(hex: 0xB42318, alpha: 0.06))
+    }
+}
+
+// Icon-only command button with a tooltip — the desktop-app idiom the toolbar
+// leaned away from with text pills.
+struct IconButton: View {
+    let icon: String
+    let help: String
+    var size: CGFloat = 14
+    var prominent: Bool = false
+    var tint: Color? = nil
+    let action: () -> Void
+    var body: some View {
+        Button(action: action) {
+            SFIcon(name: icon, size: size, weight: .semibold)
+                .foregroundStyle(prominent ? .white : (tint ?? Theme.ink2))
+                .frame(width: 30, height: 28)
+                .background(prominent ? (tint ?? Theme.ink) : Theme.panel)
+                .overlay(RoundedRectangle(cornerRadius: Theme.rSm)
+                    .stroke(prominent ? .clear : Theme.line3, lineWidth: 1))
+                .clipShape(RoundedRectangle(cornerRadius: Theme.rSm))
+        }
+        .buttonStyle(.plain)
+        .help(help)
+    }
+}

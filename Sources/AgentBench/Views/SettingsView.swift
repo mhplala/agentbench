@@ -25,6 +25,17 @@ struct SettingsView: View {
                             }
                         }
                     }
+                    row("密度") {
+                        HStack(spacing: 2) {
+                            densitySeg("regular", "适中")
+                            densitySeg("compact", "紧凑")
+                        }
+                        .padding(3).background(Theme.panel2)
+                        .overlay(RoundedRectangle(cornerRadius: Theme.rSm).stroke(Theme.line2, lineWidth: 1))
+                        .clipShape(RoundedRectangle(cornerRadius: Theme.rSm))
+                    }
+                    Text("影响列间距、卡片内边距和对话流的纵向节奏。")
+                        .font(Theme.ui(12.5)).foregroundStyle(Theme.ink3)
                 }
 
                 section("对话") {
@@ -157,6 +168,17 @@ struct SettingsView: View {
         .padding(.horizontal, 40).padding(.vertical, 14)
         .background(Theme.panel.opacity(0.95))
         .overlay(Rectangle().frame(height: 1).foregroundStyle(Theme.line), alignment: .bottom)
+    }
+
+    private func densitySeg(_ key: String, _ label: String) -> some View {
+        let on = prefs.density == key
+        return Button { prefs.density = key } label: {
+            Text(label).font(Theme.ui(12.5, .semibold))
+                .foregroundStyle(on ? Theme.ink : Theme.ink2)
+                .padding(.horizontal, 13).padding(.vertical, 5)
+                .background(on ? Theme.panel : .clear)
+                .clipShape(RoundedRectangle(cornerRadius: Theme.rXs))
+        }.buttonStyle(.plain)
     }
 
     private func settingBtn(_ icon: String, _ label: String) -> some View {

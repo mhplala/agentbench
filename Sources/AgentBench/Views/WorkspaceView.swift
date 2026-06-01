@@ -40,57 +40,49 @@ struct WorkBar: View {
                     }
                 }
                 .frame(maxWidth: app.live.laneCount > 2 ? 720 : 520)
+
+                // command actions as icon buttons + tooltips (desktop-app idiom)
                 if !running && app.live.judgeOn {
-                    Button { app.judgeOpen.toggle() } label: { wbLabel("gavel", "裁判", on: app.judgeOpen) }.buttonStyle(.plain)
+                    IconButton(icon: "gavel", help: "自动裁判", prominent: app.judgeOpen,
+                               tint: app.accentColor) { app.judgeOpen.toggle() }
                 }
                 if app.livePhase == .done {
-                    Button { Exporter.exportWithPanel(app.live) } label: { wbLabel("send", "导出", on: false) }
-                        .buttonStyle(.plain).help("导出 trace / 日志 / 指标 / 裁判到文件夹")
+                    IconButton(icon: "send", help: "导出 trace / 日志 / 指标 / 裁判到文件夹") {
+                        Exporter.exportWithPanel(app.live)
+                    }
                 }
                 if running {
-                    Button { app.cancelRun() } label: { wbLabel("x", "停止", on: false) }.buttonStyle(.plain)
+                    IconButton(icon: "x", help: "停止运行") { app.cancelRun() }
                 } else {
-                    Button { app.runComparison() } label: { wbLabel("refresh", "重跑", on: false) }
-                        .buttonStyle(.plain).disabled(!app.canRun())
+                    IconButton(icon: "refresh", help: "重跑") { app.runComparison() }
+                        .disabled(!app.canRun())
                 }
             }
         }
         .padding(.horizontal, 22).frame(height: 58)
-        .padding(.top, 28)   // clear the titlebar / traffic-light strip
         .background(Theme.panel.opacity(0.95))
         .overlay(Rectangle().frame(height: 1).foregroundStyle(Theme.line), alignment: .bottom)
-    }
-
-    private func wbLabel(_ icon: String, _ text: String, on: Bool) -> some View {
-        HStack(spacing: 7) { SFIcon(name: icon, size: 15); Text(text).font(Theme.ui(13, .semibold)) }
-            .foregroundStyle(on ? .white : Theme.ink)
-            .padding(.horizontal, 12).padding(.vertical, 7)
-            .background(on ? app.accentColor : Theme.panel)
-            .overlay(RoundedRectangle(cornerRadius: Theme.rSm).stroke(on ? app.accentColor : Theme.line3, lineWidth: 1))
-            .clipShape(RoundedRectangle(cornerRadius: Theme.rSm))
     }
 }
 
 struct Convo: View {
     @EnvironmentObject var app: AppState
+    @Environment(\.density) private var density
     private var maxW: CGFloat { app.live.laneCount > 2 ? 1640 : 1100 }
     var body: some View {
         ScrollView {
-            VStack(spacing: 22) {
+            VStack(spacing: density.convoGap) {
                 HStack(alignment: .top, spacing: 12) {
                     Text("你").font(Theme.ui(12, .semibold)).foregroundStyle(.white)
-                        .frame(width: 28, height: 28).background(Theme.ink)
+                        .frame(width: 28, height: 28).background(Theme.identity)
                         .clipShape(RoundedRectangle(cornerRadius: 8))
                     Text(app.live.task).font(Theme.ui(14.5)).foregroundStyle(Theme.ink)
                         .fixedSize(horizontal: false, vertical: true)
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .padding(.horizontal, 16).padding(.vertical, 13)
-                        .background(Theme.panel)
-                        .overlay(RoundedRectangle(cornerRadius: Theme.r).stroke(Theme.line, lineWidth: 1))
-                        .clipShape(RoundedRectangle(cornerRadius: Theme.r))
-                        .cardShadow()
+                        .panel(fill: Theme.panel2)   // flat prompt panel, no shadow
                 }
-                HStack(alignment: .top, spacing: 14) {
+                HStack(alignment: .top, spacing: density.colGap) {
                     ForEach(app.live.configs.indices, id: \.self) { i in
                         ConvoColumn(run: app.live.runs[i], cfg: app.live.configs[i], lane: i)
                     }
@@ -172,20 +164,17 @@ struct ActionBar: View {
                 }
             }
             Spacer(minLength: 12)
-            HStack(spacing: 10) {
-                Segmented(view: $app.artifactView)
-                DiffToggle()
-                Button { app.compareOpen = true } label: {
-                    HStack(spacing: 7) { SFIcon(name: "expand", size: 14); Text("放大对比").font(Theme.ui(12.5, .semibold)) }
-                        .foregroundStyle(.white).padding(.horizontal, 12).padding(.vertical, 7)
-                        .background(app.accentColor).clipShape(RoundedRectangle(cornerRadius: Theme.rSm))
-                }.buttonStyle(.plain)
-                Rectangle().frame(width: 1, height: 24).foregroundStyle(Theme.line)
-                Text("你的判断").font(Theme.ui(12.5, .semibold)).foregroundStyle(Theme.ink3)
-                HStack(spacing: 6) {
-                    ForEach(app.live.configs.indices, id: \.self) { i in voteBtn(Lane.label(i), "\(Lane.label(i)) 更好") }
-                    voteBtn("tie", "平局")
+            // distinct groups: [view mode] · [commands] · [your vote]
+            HStack(spacing: 12) {
+                HStack(spacing: 8) {
+                    Segmented(view: $app.artifactView)
+                    DiffToggle()
                 }
+                IconButton(icon: "expand", help: "放大对比", prominent: true, tint: app.accentColor) {
+                    app.compareOpen = true
+                }
+                Rectangle().frame(width: 1, height: 22).foregroundStyle(Theme.line)
+                VoteGroup()
             }
         }
         .padding(.horizontal, 22).padding(.vertical, 12)
@@ -201,17 +190,38 @@ struct ActionBar: View {
             MetricChips(m: app.live.runs[i].metrics, peers: allMetrics)
         }
     }
+}
 
-    private func voteBtn(_ key: String, _ label: String) -> some View {
+// Compact segmented vote control: one A/B/C/D pill per lane + 平局, with a small
+// leading label so it reads as a dedicated "your verdict" group.
+struct VoteGroup: View {
+    @EnvironmentObject var app: AppState
+    var body: some View {
+        HStack(spacing: 8) {
+            SFIcon(name: "trophy", size: 12).foregroundStyle(Theme.ink3)
+                .help("你的判断")
+            HStack(spacing: 2) {
+                ForEach(app.live.configs.indices, id: \.self) { i in
+                    seg(Lane.label(i), Lane.label(i), help: "\(Lane.label(i)) 更好")
+                }
+                seg("tie", "=", help: "平局")
+            }
+            .padding(3).background(Theme.panel2)
+            .overlay(RoundedRectangle(cornerRadius: Theme.rSm).stroke(Theme.line2, lineWidth: 1))
+            .clipShape(RoundedRectangle(cornerRadius: Theme.rSm))
+        }
+    }
+
+    private func seg(_ key: String, _ label: String, help: String) -> some View {
         let on = app.live.vote == key
         return Button { app.vote(key) } label: {
-            Text(label).font(Theme.ui(12.5, .semibold))
-                .foregroundStyle(on ? .white : Theme.ink)
-                .padding(.horizontal, 12).padding(.vertical, 7)
-                .background(on ? app.accentColor : Theme.panel)
-                .overlay(RoundedRectangle(cornerRadius: Theme.rSm).stroke(on ? app.accentColor : Theme.line3, lineWidth: 1))
-                .clipShape(RoundedRectangle(cornerRadius: Theme.rSm))
-        }.buttonStyle(.plain)
+            Text(label).font(Theme.ui(12.5, .bold))
+                .foregroundStyle(on ? .white : Theme.ink2)
+                .frame(minWidth: 24).padding(.horizontal, 6).padding(.vertical, 4)
+                .background(on ? app.accentColor : .clear)
+                .clipShape(RoundedRectangle(cornerRadius: Theme.rXs))
+        }
+        .buttonStyle(.plain).help(help)
     }
 }
 

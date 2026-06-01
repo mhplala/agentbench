@@ -2,19 +2,22 @@ import SwiftUI
 
 struct RootView: View {
     @EnvironmentObject var app: AppState
-    @State private var collapsed = false
+    @ObservedObject private var prefs = Prefs.shared
+    @State private var columns: NavigationSplitViewVisibility = .all
 
     var body: some View {
-        HStack(spacing: 0) {
-            Sidebar(collapsed: $collapsed)
+        NavigationSplitView(columnVisibility: $columns) {
+            Sidebar()
+                .navigationSplitViewColumnWidth(min: 260, ideal: 288, max: 360)
+                .toolbar(removing: .sidebarToggle)
+        } detail: {
             mainArea
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
-        .frame(minWidth: 1000, minHeight: 680)
-        .background(Theme.bg)
-        .background(WindowConfigurator())   // Tahoe chrome: lights over sidebar
+        .navigationSplitViewStyle(.balanced)
+        .frame(minWidth: 1040, minHeight: 700)
         .environment(\.colorScheme, .light)
-        .ignoresSafeArea(.container, edges: .top)   // content under the titlebar
+        .environment(\.density, DensityMetrics.from(prefs.density))
     }
 
     @ViewBuilder private var mainArea: some View {

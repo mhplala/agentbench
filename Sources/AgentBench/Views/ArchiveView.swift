@@ -42,7 +42,6 @@ struct ArchiveView: View {
                 }
             }
             .padding(.horizontal, 22).frame(height: 58)
-            .padding(.top, 28)   // clear the titlebar / traffic-light strip
             .background(Theme.panel.opacity(0.95))
             .overlay(Rectangle().frame(height: 1).foregroundStyle(Theme.line), alignment: .bottom)
 

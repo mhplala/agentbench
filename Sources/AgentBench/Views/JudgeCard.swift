@@ -4,6 +4,9 @@ struct JudgeCard: View {
     let v: Verdict
     var accent: Color
 
+    private var laneCount: Range<Int> { 0..<v.scores.count }
+    private var scoreColW: CGFloat { v.scores.count >= 4 ? 30 : 38 }
+
     var body: some View {
         VStack(spacing: 0) {
             // top
@@ -35,20 +38,41 @@ struct JudgeCard: View {
             }
             .padding(.horizontal, 14).padding(.vertical, 13)
 
-            // criteria (per lane scores)
+            // criteria — a real compact comparison table: fixed dimension column,
+            // one fixed score column per agent (aligned with the header), note fills
+            // the rest. Best score per row reads from alignment + weight, not color.
             VStack(spacing: 0) {
+                // header
+                HStack(spacing: 10) {
+                    Text("维度").font(Theme.ui(10.5, .bold)).tracking(0.8).foregroundStyle(Theme.ink3)
+                        .frame(width: 64, alignment: .leading)
+                    HStack(spacing: 0) {
+                        ForEach(laneCount, id: \.self) { i in
+                            Text(Lane.label(i)).font(Theme.ui(10.5, .bold)).foregroundStyle(Theme.ink3)
+                                .frame(width: scoreColW, alignment: .center)
+                        }
+                    }
+                    Text("说明").font(Theme.ui(10.5, .bold)).tracking(0.8).foregroundStyle(Theme.ink3)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                }
+                .padding(.vertical, 7).padding(.horizontal, 16)
+                .background(Theme.panel2)
+                .overlay(Rectangle().frame(height: 1).foregroundStyle(Theme.line2), alignment: .bottom)
+
                 ForEach(v.criteria) { c in
-                    HStack(alignment: .top, spacing: 12) {
+                    HStack(spacing: 10) {
                         Text(c.name).font(Theme.ui(12.5, .semibold)).foregroundStyle(Theme.ink)
                             .frame(width: 64, alignment: .leading)
-                        HStack(spacing: 4) {
+                        HStack(spacing: 0) {
+                            let best = c.scores.max() ?? 0
                             ForEach(c.scores.indices, id: \.self) { i in
-                                if i > 0 { Text("/").foregroundStyle(Theme.ink3) }
-                                Text("\(c.scores[i])").font(Theme.mono(12.5, .semibold))
-                                    .foregroundStyle(c.scores[i] == (c.scores.max() ?? 0) ? Theme.ink : Theme.ink3)
+                                let isBest = c.scores[i] == best && c.scores.filter { $0 == best }.count == 1
+                                Text("\(c.scores[i])")
+                                    .font(Theme.mono(12.5, isBest ? .bold : .regular))
+                                    .foregroundStyle(isBest ? Theme.ink : Theme.ink3)
+                                    .frame(width: scoreColW, alignment: .center)
                             }
                         }
-                        .frame(width: 78, alignment: .leading)
                         Text(c.note).font(Theme.ui(12)).foregroundStyle(Theme.ink2)
                             .fixedSize(horizontal: false, vertical: true)
                             .frame(maxWidth: .infinity, alignment: .leading)
@@ -119,10 +143,7 @@ struct JudgeDrawer: View {
                                 JudgeCard(v: v, accent: app.accentColor)
                             } else {
                                 VStack(alignment: .leading, spacing: 12) {
-                                    HStack(spacing: 6) {
-                                        SFIcon(name: "warn", size: 13).foregroundStyle(Theme.bad)
-                                        Text("裁判未产出结果").font(Theme.ui(13.5, .semibold)).foregroundStyle(Theme.ink)
-                                    }
+                                    EmptyState(icon: "warn", title: "裁判未产出结果")
                                     if let err = app.live.judgeError {
                                         Text(err).font(Theme.mono(11.5)).foregroundStyle(Theme.ink2)
                                             .textSelection(.enabled).fixedSize(horizontal: false, vertical: true)
@@ -146,10 +167,10 @@ struct JudgeDrawer: View {
                     }
                 }
                 .frame(width: 360)
-                .frame(maxWidth: .infinity, alignment: .trailing)
-                .background(Theme.panel)
+                .background(Theme.panel)   // only the 360-wide panel is opaque…
                 .overlay(Rectangle().frame(width: 1).foregroundStyle(Theme.line), alignment: .leading)
                 .shadow(color: .black.opacity(0.12), radius: 30, x: -8, y: 0)
+                .frame(maxWidth: .infinity, alignment: .trailing)   // …then pin it to the right
                 .transition(.move(edge: .trailing))
             }
         }

@@ -14,8 +14,8 @@ struct AgentBenchApp: App {
                 .onAppear { app.bootstrap() }
                 .preferredColorScheme(.light)
         }
-        .windowStyle(.titleBar)
-        .windowToolbarStyle(.unified)
+        // default window style → on macOS Tahoe, NavigationSplitView floats the
+        // sidebar natively with the traffic lights INSIDE it.
         .commands {
             CommandGroup(replacing: .newItem) {
                 Button("新建对比") { app.newComparison() }

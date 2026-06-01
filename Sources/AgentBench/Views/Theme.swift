@@ -48,7 +48,35 @@ enum Theme {
         .system(size: size, weight: weight, design: .monospaced)
     }
 
-    static let accentChoices: [UInt32] = [0x111111, 0x2563EB, 0x16A34A, 0xDB2777]
+    // identity-mark color: reserved for lane glyphs / "you" avatar — stays ink so
+    // accent isn't smeared across every filled surface.
+    static let identity = Color(hex: 0x16161A)
+
+    static let accentChoices: [UInt32] = [0x111111, 0x5B61D6, 0x2563EB, 0x16A34A]
+}
+
+// MARK: - Density (drives spacing/padding so the Settings control is real)
+
+enum Density: String { case compact, regular }
+
+struct DensityMetrics: Equatable {
+    let cardPad: CGFloat     // inner padding of panels/cards
+    let colGap: CGFloat      // gap between lane columns
+    let convoGap: CGFloat    // vertical rhythm of the conversation stream
+    let turnGap: CGFloat     // gap between turns inside a column
+    let sectionGap: CGFloat  // compose / settings section rhythm
+
+    static let regular = DensityMetrics(cardPad: 16, colGap: 14, convoGap: 22, turnGap: 12, sectionGap: 22)
+    static let compact = DensityMetrics(cardPad: 12, colGap: 10, convoGap: 15, turnGap: 8,  sectionGap: 15)
+    static func from(_ s: String) -> DensityMetrics { s == "compact" ? .compact : .regular }
+}
+
+private struct DensityKey: EnvironmentKey { static let defaultValue: DensityMetrics = .regular }
+extension EnvironmentValues {
+    var density: DensityMetrics {
+        get { self[DensityKey.self] }
+        set { self[DensityKey.self] = newValue }
+    }
 }
 
 extension Color {
@@ -67,14 +95,26 @@ extension Color {
     }
 }
 
-// Soft card shadow approximating the prototype's --shadow.
+// Soft shadow — reserved for genuine "lifted" surfaces (overlays, drawers, the
+// single artifact card). Softened from the prototype so stacked panels don't
+// read as a mock-up of cards-on-cards.
 struct CardShadow: ViewModifier {
     func body(content: Content) -> some View {
         content
-            .shadow(color: Color(hex: 0x14141A, alpha: 0.04), radius: 1, x: 0, y: 1)
-            .shadow(color: Color(hex: 0x14141A, alpha: 0.05), radius: 9, x: 0, y: 6)
+            .shadow(color: Color(hex: 0x14141A, alpha: 0.035), radius: 1, x: 0, y: 1)
+            .shadow(color: Color(hex: 0x14141A, alpha: 0.04), radius: 7, x: 0, y: 4)
     }
 }
 extension View {
     func cardShadow() -> some View { modifier(CardShadow()) }
+
+    // Flat panel: hairline + fill, no shadow. The default container treatment —
+    // information is organized by spacing/hairline/background level, not elevation.
+    func panel(_ radius: CGFloat = Theme.r,
+               fill: Color = Theme.panel,
+               stroke: Color = Theme.line) -> some View {
+        background(fill)
+            .overlay(RoundedRectangle(cornerRadius: radius).stroke(stroke, lineWidth: 1))
+            .clipShape(RoundedRectangle(cornerRadius: radius))
+    }
 }

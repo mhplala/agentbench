@@ -3,6 +3,7 @@ import SwiftUI
 // One agent's conversation column (header + streaming turns).
 struct ConvoColumn: View {
     @EnvironmentObject var app: AppState
+    @Environment(\.density) private var density
     let run: RunResult
     let cfg: AgentConfig
     let lane: Int
@@ -32,7 +33,7 @@ struct ConvoColumn: View {
             .overlay(Rectangle().frame(height: 1).foregroundStyle(Theme.line2), alignment: .bottom)
 
             // body
-            VStack(alignment: .leading, spacing: 12) {
+            VStack(alignment: .leading, spacing: density.turnGap) {
                 if let err = run.error, run.status == .failed {
                     errorBox(err)
                 }
@@ -48,12 +49,11 @@ struct ConvoColumn: View {
                 }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(16)
+            .padding(density.cardPad)
         }
-        .background(Theme.panel)
-        .clipShape(RoundedRectangle(cornerRadius: Theme.r))
-        .overlay(RoundedRectangle(cornerRadius: Theme.r).stroke(Theme.line, lineWidth: 1))
-        .cardShadow()
+        // Flat panel — the column organizes by hairline + background level, not a
+        // shadowed card. Cards are reserved for the artifact inside.
+        .panel()
     }
 
     private var visibleTurns: [Turn] {
@@ -62,21 +62,10 @@ struct ConvoColumn: View {
 
     @ViewBuilder private var statusView: some View {
         switch run.status {
-        case .running:
-            HStack(spacing: 6) { Spinner(); Text("运行中").font(Theme.mono(11.5, .semibold)) }
-                .foregroundStyle(Theme.ink2)
-        case .done:
-            HStack(spacing: 6) {
-                SFIcon(name: "check", size: 12)
-                Text("完成 · \(Fmt.sec(run.metrics.latencyMs))").font(Theme.mono(11.5, .semibold))
-            }.foregroundStyle(Theme.good)
-        case .failed:
-            HStack(spacing: 6) {
-                SFIcon(name: "warn", size: 12)
-                Text("失败").font(Theme.mono(11.5, .semibold))
-            }.foregroundStyle(Theme.bad)
-        case .pending:
-            Text("待运行").font(Theme.mono(11.5)).foregroundStyle(Theme.ink3)
+        case .running: StatusPill(kind: .running, text: "运行中", spinning: true)
+        case .done:    StatusPill(kind: .done, text: "完成 · \(Fmt.sec(run.metrics.latencyMs))")
+        case .failed:  StatusPill(kind: .failed, text: "失败")
+        case .pending: StatusPill(kind: .idle, text: "待运行")
         }
     }
 
@@ -203,26 +192,27 @@ struct AnswerCard: View {
         HStack(alignment: .top, spacing: 10) {
             AgentGlyph(agentId: app.live.configs.indices.contains(lane) ? app.live.configs[lane].agentId : "claude-code",
                        lane: lane, box: 26)
-            VStack(alignment: .leading, spacing: 0) {
+            VStack(alignment: .leading, spacing: 10) {
+                // summary reads as plain prose, not a nested card
                 Text(turn.summary)
                     .font(Theme.ui(13.5)).foregroundStyle(Theme.ink)
                     .textSelection(.enabled)
                     .fixedSize(horizontal: false, vertical: true)
                     .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(.horizontal, 15).padding(.vertical, 13)
 
                 if !turn.files.isEmpty {
                     VStack(alignment: .leading, spacing: 6) {
                         ForEach(turn.files) { f in FileRow(f: f) }
                     }
-                    .padding(.horizontal, 15).padding(.bottom, 13)
-                    .overlay(Rectangle().frame(height: 1).foregroundStyle(Theme.line2), alignment: .bottom)
+                    .padding(11)
+                    .panel(Theme.rSm, fill: Theme.panel2, stroke: Theme.line2)
                 }
+
+                // the artifact is the one genuine product → the one real card
                 ArtifactViewer(turn: turn, lane: lane)
+                    .panel(Theme.rSm, stroke: Theme.line2)
+                    .cardShadow()
             }
-            .background(Theme.panel)
-            .overlay(RoundedRectangle(cornerRadius: Theme.r).stroke(Theme.line, lineWidth: 1))
-            .clipShape(RoundedRectangle(cornerRadius: Theme.r))
         }
     }
 }
@@ -250,24 +240,18 @@ struct FileRow: View {
 }
 
 // Safety banner over an untrusted preview; lets the user opt into JS/assets/network.
+// Built on the shared WarningBanner vocabulary, over a material so it stays legible
+// against arbitrary preview content.
 struct TrustBanner: View {
     @EnvironmentObject var app: AppState
     let lane: Int
     var body: some View {
-        HStack(spacing: 8) {
-            SFIcon(name: "warn", size: 12).foregroundStyle(Theme.ink2)
-            Text("未信任 · 脚本/资源/网络已禁用")
-                .font(Theme.ui(11.5)).foregroundStyle(Theme.ink2)
-            Spacer(minLength: 8)
-            Button { app.trust(lane) } label: {
-                Text("信任并运行").font(Theme.ui(11.5, .semibold)).foregroundStyle(.white)
-                    .padding(.horizontal, 10).padding(.vertical, 4)
-                    .background(Theme.ink).clipShape(Capsule())
-            }.buttonStyle(.plain)
-        }
-        .padding(.horizontal, 10).padding(.vertical, 7)
-        .background(.regularMaterial)
-        .overlay(Rectangle().frame(height: 1).foregroundStyle(Theme.line2), alignment: .top)
+        WarningBanner(text: "未信任 · 脚本/资源/网络已禁用",
+                      actionLabel: "信任并运行",
+                      action: { app.trust(lane) },
+                      accent: app.accentColor)
+            .background(.regularMaterial)
+            .overlay(Rectangle().frame(height: 1).foregroundStyle(Theme.line2), alignment: .top)
     }
 }
 
@@ -281,27 +265,18 @@ struct ArtifactViewer: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            HStack(spacing: 4) {
-                tab("preview", "play", "预览")
-                tab("code", "terminal", "代码")
+            HStack(spacing: 8) {
+                Segmented(view: $app.artifactView)
                 Spacer()
                 Text(app.artifactView == "code" ? "\(turn.code.components(separatedBy: "\n").count) 行"
                                                  : (turn.previewHTML == nil ? "无可渲染预览" : "渲染产物"))
                     .font(Theme.mono(10.5)).foregroundStyle(Theme.ink3)
                 if turn.previewHTML != nil {
-                    Button { app.openInBrowser(lane) } label: {
-                        SFIcon(name: "browser", size: 13).foregroundStyle(Theme.ink3)
-                    }
-                    .buttonStyle(.plain).help("在浏览器打开")
-                    .padding(.leading, 8)
+                    IconButton(icon: "browser", help: "在浏览器打开", size: 13) { app.openInBrowser(lane) }
                 }
-                Button { app.compareOpen = true } label: {
-                    SFIcon(name: "expand", size: 13).foregroundStyle(Theme.ink3)
-                }
-                .buttonStyle(.plain).help("放大对比")
-                .padding(.leading, 8)
+                IconButton(icon: "expand", help: "放大对比", size: 13) { app.compareOpen = true }
             }
-            .padding(.horizontal, 12).padding(.vertical, 8)
+            .padding(.horizontal, 10).padding(.vertical, 7)
             .background(Theme.panel2)
             .overlay(Rectangle().frame(height: 1).foregroundStyle(Theme.line2), alignment: .bottom)
 
@@ -329,28 +304,8 @@ struct ArtifactViewer: View {
     }
 
     private var noPreview: some View {
-        VStack(spacing: 6) {
-            SFIcon(name: "info", size: 18).foregroundStyle(Theme.ink3)
-            Text("此任务无可视化预览").font(Theme.ui(12.5)).foregroundStyle(Theme.ink3)
-            Text("切到「代码」查看 diff").font(Theme.ui(11.5)).foregroundStyle(Theme.ink3)
-        }
-        .frame(maxWidth: .infinity).frame(height: 300)
-        .background(Theme.panel2)
-    }
-
-    private func tab(_ key: String, _ icon: String, _ label: String) -> some View {
-        let on = app.artifactView == key
-        return Button {
-            app.artifactView = key
-        } label: {
-            HStack(spacing: 6) { SFIcon(name: icon, size: 12); Text(label).font(Theme.ui(12, .semibold)) }
-                .foregroundStyle(on ? Theme.ink : Theme.ink3)
-                .padding(.horizontal, 11).padding(.vertical, 5)
-                .background(on ? Theme.panel : .clear)
-                .clipShape(RoundedRectangle(cornerRadius: Theme.rXs))
-                .overlay(RoundedRectangle(cornerRadius: Theme.rXs)
-                    .stroke(on ? Theme.line2 : .clear, lineWidth: 1))
-        }
-        .buttonStyle(.plain)
+        EmptyState(icon: "info", title: "此任务无可视化预览", message: "切到「代码」查看 diff")
+            .frame(maxWidth: .infinity).frame(height: 300)
+            .background(Theme.panel2)
     }
 }
