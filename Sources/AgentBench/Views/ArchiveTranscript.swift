@@ -50,9 +50,10 @@ struct ArchiveLaneColumn: View {
                         .padding(11).background(Theme.delBG)
                         .clipShape(RoundedRectangle(cornerRadius: Theme.rSm))
                 }
-                if visibleTurns.isEmpty {
-                    Text("（无转录记录）").font(Theme.ui(12.5)).foregroundStyle(Theme.ink3)
-                        .frame(maxWidth: .infinity, alignment: .center).padding(.vertical, 20)
+                if visibleTurns.isEmpty && run.error == nil {
+                    EmptyState(icon: "read", title: "无转录记录",
+                               message: app.prefs.showThinking ? "这次运行没有产生可显示的对话步骤"
+                                                               : "仅有推理步骤，已在设置中隐藏")
                 }
                 ForEach(visibleTurns) { turn in
                     ArchiveTurnView(turn: turn, cfg: cfg, run: run, lane: lane)
@@ -193,13 +194,13 @@ struct ArchiveAnswerCard: View {
 
     private var artifact: some View {
         VStack(spacing: 0) {
-            HStack(spacing: 4) {
-                tabButton("preview", "play", "预览")
-                tabButton("code", "terminal", "代码")
-                Spacer()
+            HStack(spacing: 8) {
+                Segmented(view: $tab)   // shared control: doesn't squish in narrow columns
+                Spacer(minLength: 6)
                 Text(tab == "code" ? "\(turn.code.components(separatedBy: "\n").count) 行"
                                    : (turn.previewHTML == nil ? "无可渲染预览" : "渲染产物"))
                     .font(Theme.mono(10.5)).foregroundStyle(Theme.ink3)
+                    .lineLimit(1)
                 if turn.previewHTML != nil, fileStillOnDisk {
                     Button {
                         if let f = run.previewFileURL {
@@ -264,18 +265,5 @@ struct ArchiveAnswerCard: View {
             }
         }
         .background(Theme.panel)
-    }
-
-    private func tabButton(_ key: String, _ icon: String, _ label: String) -> some View {
-        let on = tab == key
-        return Button { tab = key } label: {
-            HStack(spacing: 6) { SFIcon(name: icon, size: 12); Text(label).font(Theme.ui(12, .semibold)) }
-                .foregroundStyle(on ? Theme.ink : Theme.ink3)
-                .padding(.horizontal, 11).padding(.vertical, 5)
-                .background(on ? Theme.panel : .clear)
-                .clipShape(RoundedRectangle(cornerRadius: Theme.rXs))
-                .overlay(RoundedRectangle(cornerRadius: Theme.rXs).stroke(on ? Theme.line2 : .clear, lineWidth: 1))
-        }
-        .buttonStyle(.plain)
     }
 }

@@ -2,6 +2,7 @@ import SwiftUI
 
 struct ComposeView: View {
     @EnvironmentObject var app: AppState
+    @FocusState private var taskFocused: Bool
 
     var body: some View {
         ScrollView {
@@ -19,12 +20,16 @@ struct ComposeView: View {
                     .font(Theme.ui(16))
                     .scrollContentBackground(.hidden)
                     .frame(minHeight: 120)
+                    .focused($taskFocused)
                     // Placeholder overlays the editor BEFORE the outer padding, so both
                     // share the same .padding(12); only the NSTextView's small internal
                     // text inset (≈5 leading / ≈1 top) is matched here, keeping the
                     // placeholder's first glyph exactly on the caret.
+                    // Hide it once focused too: while an IME is composing, the marked
+                    // text isn't yet in `task`, so an isEmpty-only check would leave the
+                    // placeholder overlapping the half-typed characters.
                     .overlay(alignment: .topLeading) {
-                        if app.live.task.isEmpty {
+                        if app.live.task.isEmpty && !taskFocused {
                             Text("例如：为电商后台实现一个订单列表组件，支持搜索、分页、批量删除（React + TypeScript），并补充单元测试。")
                                 .font(Theme.ui(16)).foregroundStyle(Theme.ink3)
                                 .padding(.leading, 5).padding(.top, 1)
@@ -97,36 +102,54 @@ struct ComposeView: View {
     }
 
     private var judgeBar: some View {
-        HStack(spacing: 16) {
-            Button { app.live.judgeOn.toggle() } label: {
-                HStack(spacing: 11) {
-                    Toggle2(on: app.live.judgeOn)
-                    SFIcon(name: "gavel", size: 15).foregroundStyle(Theme.ink2)
-                    VStack(alignment: .leading, spacing: 1) {
-                        Text("自动裁判").font(Theme.ui(14, .semibold)).foregroundStyle(Theme.ink)
-                        Text("由「元 Agent」评判（与参赛 agent 独立，下方可配）").font(Theme.ui(13)).foregroundStyle(Theme.ink3)
+        VStack(alignment: .leading, spacing: 0) {
+            // top row: the toggle + its explanation on the left, run button on the right
+            HStack(spacing: 12) {
+                Button { app.live.judgeOn.toggle() } label: {
+                    HStack(spacing: 11) {
+                        Toggle2(on: app.live.judgeOn)
+                        SFIcon(name: "gavel", size: 15).foregroundStyle(Theme.ink2)
+                        VStack(alignment: .leading, spacing: 1) {
+                            Text("自动裁判").font(Theme.ui(14, .semibold)).foregroundStyle(Theme.ink)
+                            Text("由「元 Agent」评判 · 与参赛 agent 独立")
+                                .font(Theme.ui(13)).foregroundStyle(Theme.ink3)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
                     }
+                    .contentShape(Rectangle())   // make gaps/padding hittable, not just opaque glyphs
                 }
-            }
-            .buttonStyle(.plain)
+                .buttonStyle(.plain)
 
-            if app.live.judgeOn { MetaAgentPicker() }
-            Spacer()
-            Button { app.runComparison() } label: {
-                HStack(spacing: 9) {
-                    SFIcon(name: "play", size: 14)
-                    Text("运行对比").font(Theme.ui(14.5, .semibold))
-                    Text("⌘↵").font(Theme.mono(10)).padding(.horizontal, 5).padding(.vertical, 1)
-                        .background(Color.white.opacity(0.16)).clipShape(RoundedRectangle(cornerRadius: 4))
+                Spacer(minLength: 16)
+
+                Button { app.runComparison() } label: {
+                    HStack(spacing: 9) {
+                        SFIcon(name: "play", size: 14)
+                        Text("运行对比").font(Theme.ui(14.5, .semibold))
+                        Text("⌘↵").font(Theme.mono(10)).padding(.horizontal, 5).padding(.vertical, 1)
+                            .background(Color.white.opacity(0.16)).clipShape(RoundedRectangle(cornerRadius: 4))
+                    }
+                    .foregroundStyle(.white).fixedSize()
+                    .padding(.horizontal, 20).padding(.vertical, 11)
+                    .background(app.canRun() ? app.accentColor : Theme.ink3)
+                    .clipShape(RoundedRectangle(cornerRadius: Theme.r))
                 }
-                .foregroundStyle(.white)
-                .padding(.horizontal, 20).padding(.vertical, 11)
-                .background(app.canRun() ? app.accentColor : Theme.ink3)
-                .clipShape(RoundedRectangle(cornerRadius: Theme.r))
+                .buttonStyle(.plain)
+                .disabled(!app.canRun())
+                .keyboardShortcut(.return, modifiers: .command)
             }
-            .buttonStyle(.plain)
-            .disabled(!app.canRun())
-            .keyboardShortcut(.return, modifiers: .command)
+
+            // second row: the meta-agent config gets its own full-width line so its
+            // three dropdowns aren't crammed next to the toggle + run button.
+            if app.live.judgeOn {
+                Divider().padding(.vertical, 14)
+                HStack(spacing: 10) {
+                    Text("元 AGENT").font(Theme.ui(10.5, .bold)).tracking(1).foregroundStyle(Theme.ink3)
+                        .fixedSize()
+                    MetaAgentPicker()
+                    Spacer(minLength: 0)
+                }
+            }
         }
         .padding(.horizontal, 22).padding(.vertical, 16)
         .panel()
@@ -136,12 +159,28 @@ struct ComposeView: View {
 // Detected-agents strip.
 struct EnvBar: View {
     @EnvironmentObject var app: AppState
+    @State private var showAssistant = false
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack(spacing: 6) {
                 SFIcon(name: app.scanned ? "check" : "search", size: 12).foregroundStyle(Theme.ink3)
                 Text(app.scanned ? "已检测本机 agent CLI" : "正在检测环境…")
                     .font(Theme.ui(12)).foregroundStyle(Theme.ink3)
+                Spacer(minLength: 12)
+                Button { showAssistant = true } label: {
+                    HStack(spacing: 5) {
+                        SFIcon(name: "spark", size: 11)
+                        Text("配置助手").font(Theme.ui(12, .semibold))
+                    }
+                    .foregroundStyle(Theme.ink2)
+                    .padding(.horizontal, 10).padding(.vertical, 5)
+                    .background(Theme.panel)
+                    .overlay(Capsule().stroke(Theme.line3, lineWidth: 1))
+                    .clipShape(Capsule())
+                    .contentShape(Capsule())
+                }
+                .buttonStyle(.plain)
+                .help("用一个 agent 帮你声明 / 接中转新 agent，自动写入 agents.json")
             }
             FlowLayout(spacing: 8) {
                 ForEach(app.availabilities) { a in
@@ -169,6 +208,9 @@ struct EnvBar: View {
         .overlay(RoundedRectangle(cornerRadius: Theme.rSm).stroke(Theme.line2, lineWidth: 1, antialiased: true)
             .foregroundStyle(Theme.line3))
         .clipShape(RoundedRectangle(cornerRadius: Theme.rSm))
+        .sheet(isPresented: $showAssistant) {
+            ConfigAssistantView().environmentObject(app)
+        }
     }
 }
 

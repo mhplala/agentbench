@@ -281,8 +281,12 @@ struct MenuField<MenuContent: View>: View {
     var mono: Bool = false
     var help: String? = nil
     @ViewBuilder var menu: () -> MenuContent
+    @State private var hover = false
 
     var body: some View {
+        // The styled box IS the Menu's label — a borderless menu reliably opens on a
+        // click anywhere over an opaque label (an invisible clear overlay trigger does
+        // NOT register clicks on macOS). fixedSize keeps the box from collapsing.
         Menu {
             menu()
         } label: {
@@ -291,17 +295,25 @@ struct MenuField<MenuContent: View>: View {
                     .font(mono ? Theme.mono(12.5) : Theme.ui(13))
                     .foregroundStyle(Theme.ink)
                     .lineLimit(1).truncationMode(.tail)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                SFIcon(name: "chevronD", size: 11).foregroundStyle(Theme.ink3)
+                if width != nil { Spacer(minLength: 4) }
+                SFIcon(name: "chevronD", size: 11).foregroundStyle(hover ? Theme.ink2 : Theme.ink3)
             }
             .padding(.horizontal, 12).padding(.vertical, 9)
-            .frame(width: width)
-            .background(Theme.panel2)
-            .overlay(RoundedRectangle(cornerRadius: Theme.rSm).stroke(Theme.line3, lineWidth: 1))
+            .frame(width: width, alignment: .leading)
+            .background(hover ? Color(hex: 0xF0F0F2) : Theme.panel2)   // hover highlight
+            .overlay(RoundedRectangle(cornerRadius: Theme.rSm)
+                .stroke(hover ? Theme.line3 : Theme.line2, lineWidth: 1))
             .clipShape(RoundedRectangle(cornerRadius: Theme.rSm))
+            .contentShape(Rectangle())
+            .onHover { hover = $0 }
         }
-        .menuStyle(.borderlessButton)
+        // `.button` menu style (not `.borderlessButton`) renders the label inside a
+        // real button, so a custom background/box survives; `.plain` button style
+        // strips the native bezel, leaving just our styled box + own chevron.
+        .menuStyle(.button)
+        .buttonStyle(.plain)
         .menuIndicator(.hidden)
+        .fixedSize()
         .help(help ?? "")
     }
 }

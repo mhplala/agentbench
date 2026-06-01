@@ -271,7 +271,7 @@ struct ArtifactViewer: View {
                 Spacer()
                 Text(app.artifactView == "code" ? "\(turn.codeLineCount) 行"
                                                  : (turn.previewHTML == nil ? "无可渲染预览" : "渲染产物"))
-                    .font(Theme.mono(10.5)).foregroundStyle(Theme.ink3)
+                    .font(Theme.mono(10.5)).foregroundStyle(Theme.ink3).lineLimit(1)
                 // only offer "open in browser" when there's an actual file on disk to
                 // open — openInBrowser needs previewFileURL, so an inline-only preview
                 // would make the button a no-op.
