@@ -91,7 +91,8 @@ final class Prefs: ObservableObject {
     @Published var density: String { didSet { d.set(density, forKey: "density") } }  // compact | regular
     @Published var showThinking: Bool { didSet { d.set(showThinking, forKey: "showThinking") } }
     @Published var autoApprove: Bool { didSet { d.set(autoApprove, forKey: "autoApprove") } }
-    // run JS + load sibling assets for locally-produced artifact previews by default
+    // run JS + load sibling assets for locally-produced artifact previews; OFF by
+    // default — agent-produced HTML is untrusted, user opts in per preview via「信任并运行」
     @Published var trustLocalPreviews: Bool { didSet { d.set(trustLocalPreviews, forKey: "trustLocalPreviews") } }
     // when a round ends by asking a question, auto-reply "你决定" to keep it progressing
     @Published var autoAnswerQuestions: Bool { didSet { d.set(autoAnswerQuestions, forKey: "autoAnswerQuestions") } }
@@ -111,7 +112,7 @@ final class Prefs: ObservableObject {
         density = d.string(forKey: "density") ?? "regular"
         showThinking = d.object(forKey: "showThinking") as? Bool ?? true
         autoApprove = d.object(forKey: "autoApprove") as? Bool ?? true
-        trustLocalPreviews = d.object(forKey: "trustLocalPreviews") as? Bool ?? true
+        trustLocalPreviews = d.object(forKey: "trustLocalPreviews") as? Bool ?? false
         autoAnswerQuestions = d.object(forKey: "autoAnswerQuestions") as? Bool ?? true
         sandboxRuns = d.object(forKey: "sandboxRuns") as? Bool ?? true
         metaAgentId = d.string(forKey: "metaAgentId") ?? "claude-code"
