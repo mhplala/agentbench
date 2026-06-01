@@ -36,25 +36,39 @@ enum Store {
         return (try? decoder.decode([Session].self, from: data)) ?? []
     }
 
-    static func saveSessions(_ sessions: [Session]) {
-        var arr = sessions
-        for si in arr.indices {
-            for ri in arr[si].runs.indices {
-                let full = arr[si].runs[ri].rawLog
+    // Externalizes oversized raw logs to sidecar .log files and writes the JSON.
+    // Mutates `sessions` IN PLACE (inout) so the caller's canonical state (allSessions/
+    // live) also drops the huge inline log and gains rawLogPath — otherwise the in-
+    // memory copy keeps the full log forever and every save re-writes the sidecar.
+    static func saveSessions(_ sessions: inout [Session]) {
+        for si in sessions.indices {
+            for ri in sessions[si].runs.indices {
+                let full = sessions[si].runs[ri].rawLog
+                // already externalized (tail marker under the cap) → nothing to do
                 guard full.utf8.count > rawLogInlineCap else { continue }
-                let rel = "logs/\(arr[si].id)/\(Lane.label(ri)).log"
+                let rel = "logs/\(sessions[si].id)/\(Lane.label(ri)).log"
                 let fileURL = dir.appendingPathComponent(rel)
                 try? FileManager.default.createDirectory(at: fileURL.deletingLastPathComponent(),
                                                          withIntermediateDirectories: true)
                 try? full.write(to: fileURL, atomically: true, encoding: .utf8)
-                arr[si].runs[ri].rawLogPath = rel
+                sessions[si].runs[ri].rawLogPath = rel
                 // keep only the tail inline for in-app display (full log lives in the sidecar)
                 let tail = String(full.suffix(rawLogInlineCap / 2))
-                arr[si].runs[ri].rawLog = "…（前文已外置，完整日志见 \(rel)）\n" + tail
+                sessions[si].runs[ri].rawLog = "…（前文已外置，完整日志见 \(rel)）\n" + tail
             }
         }
-        guard let data = try? encoder.encode(arr) else { return }
+        guard let data = try? encoder.encode(sessions) else { return }
         try? data.write(to: sessionsURL, options: .atomic)
+    }
+
+    // Read the complete raw log for a run: the externalized sidecar if present,
+    // otherwise the inline field (small logs that were never externalized).
+    static func fullRawLog(_ run: RunResult) -> String {
+        if let rel = run.rawLogPath,
+           let full = try? String(contentsOf: dir.appendingPathComponent(rel), encoding: .utf8) {
+            return full
+        }
+        return run.rawLog
     }
 }
 

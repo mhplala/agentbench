@@ -212,7 +212,12 @@ enum AgentRunner {
 
         result.turns = baseTurns + newTurns
         result.metrics = m
-        result.rawLog += "\n--- 续接 ---\n" + acc.rawLines.joined(separator: "\n")
+        // prior.rawLog may be only a tail marker (the full log was externalized to a
+        // sidecar). Read the full log back before appending so a follow-up doesn't
+        // drop the earlier rounds; clear rawLogPath so the grown log re-externalizes.
+        let priorFull = Store.fullRawLog(prior)
+        result.rawLog = priorFull + "\n--- 续接 ---\n" + acc.rawLines.joined(separator: "\n")
+        result.rawLogPath = nil
         result.sessionId = acc.sessionId ?? prior.sessionId
         if let em = acc.errorMessage, answerTrimmed.isEmpty, changes.files.isEmpty {
             result.status = .failed; result.error = em

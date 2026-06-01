@@ -169,7 +169,15 @@ enum ProcessRunner {
                 }
             }
         } onCancel: {
+            // SIGTERM first; a CLI that traps/ignores it would otherwise leave the
+            // termination handler (and thus the awaiting task) hung forever. Escalate
+            // to SIGKILL on the direct child after a grace period so the continuation
+            // is guaranteed to resume.
             proc.terminate()
+            let pid = proc.processIdentifier
+            DispatchQueue.global().asyncAfter(deadline: .now() + 3) {
+                if proc.isRunning { kill(pid, SIGKILL) }
+            }
         }
     }
 }

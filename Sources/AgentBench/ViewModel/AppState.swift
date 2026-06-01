@@ -54,16 +54,20 @@ final class AppState: ObservableObject {
 
     private func persistLive() {
         upsertAndSave(live)
+        // saveSessions externalized the big log in allSessions; pull the sanitized
+        // copy back into `live` too so memory drops the full inline log and `live`
+        // carries rawLogPath (consistent display + export).
+        if let s = allSessions.first(where: { $0.id == live.id }) { live = s }
         UserDefaults.standard.set(live.id, forKey: "liveSessionId")
     }
     private func upsertAndSave(_ s: Session) {
         if let i = allSessions.firstIndex(where: { $0.id == s.id }) { allSessions[i] = s }
         else { allSessions.insert(s, at: 0) }
-        Store.saveSessions(allSessions)
+        Store.saveSessions(&allSessions)   // sanitizes in place (externalizes large logs)
     }
     func deleteSession(_ id: String) {
         allSessions.removeAll { $0.id == id }
-        Store.saveSessions(allSessions)
+        Store.saveSessions(&allSessions)
         if activeId == id { activeId = "live" }
     }
 
@@ -338,6 +342,12 @@ final class AppState: ObservableObject {
         for i in live.runs.indices where live.runs[i].status == .running {
             live.runs[i].status = .failed; live.runs[i].error = "已取消"
         }
+        judging = false
+        // persist the canceled state: without finishedAt + a save, the last write
+        // (from runComparison) still has lanes as .running, so relaunch restores a
+        // stale running session.
+        live.finishedAt = live.finishedAt ?? Date()
+        persistLive()
     }
 
     func vote(_ label: String) {

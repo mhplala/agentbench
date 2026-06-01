@@ -42,11 +42,18 @@ enum Exporter {
         let fm = FileManager.default
         try fm.createDirectory(at: dir, withIntermediateDirectories: true)
 
-        // structured session (everything, machine-readable)
+        // structured session (everything, machine-readable). Hydrate the full raw
+        // logs back inline: in normal storage they're externalized to sidecars and
+        // sessions.json only holds a tail marker — an export should be self-contained.
+        var hydrated = s
+        for i in hydrated.runs.indices {
+            hydrated.runs[i].rawLog = Store.fullRawLog(hydrated.runs[i])
+            hydrated.runs[i].rawLogPath = nil
+        }
         let enc = JSONEncoder()
         enc.dateEncodingStrategy = .iso8601
         enc.outputFormatting = [.prettyPrinted, .sortedKeys, .withoutEscapingSlashes]
-        try enc.encode(s).write(to: dir.appendingPathComponent("session.json"), options: .atomic)
+        try enc.encode(hydrated).write(to: dir.appendingPathComponent("session.json"), options: .atomic)
 
         // verdict (machine-readable), if any
         if let v = s.verdict {
