@@ -75,6 +75,7 @@ struct ComposeView: View {
             .padding(.horizontal, 28).padding(.vertical, 40)
             .frame(maxWidth: .infinity)
         }
+        .navigationTitle("新建对比")
     }
 
     private var judgeBar: some View {
@@ -197,16 +198,15 @@ struct AgentSlotView: View {
             }
 
             field("Agent") {
-                Picker("", selection: $cfg.agentId) {
+                MenuField(label: "\(spec.name) · \(spec.vendor)") {
                     ForEach(AgentCatalog.all) { a in
-                        Text("\(a.name) · \(a.vendor)").tag(a.id)
+                        Button("\(a.name) · \(a.vendor)") {
+                            cfg.agentId = a.id
+                            cfg.model = ""        // reset to agent default; pick a real one from the menu
+                            cfg.providerId = nil  // providers are per-agent
+                            testResult = nil
+                        }
                     }
-                }
-                .labelsHidden()
-                .onChange(of: cfg.agentId) { _, _ in
-                    cfg.model = ""        // reset to agent default; pick a real one from the menu
-                    cfg.providerId = nil  // providers are per-agent
-                    testResult = nil
                 }
             }
 
@@ -219,15 +219,15 @@ struct AgentSlotView: View {
             if !provs.isEmpty {
                 field("Provider · cc-switch") {
                     HStack(spacing: 8) {
-                        Picker("", selection: $cfg.providerId) {
-                            Text("默认（当前激活）").tag(String?.none)
+                        MenuField(label: cfg.providerId.flatMap { id in provs.first { $0.id == id }?.name }
+                                    ?? "默认（当前激活）") {
+                            Button("默认（当前激活）") { cfg.providerId = nil; testResult = nil }
                             ForEach(provs) { p in
-                                Text(p.name + (p.isDefault ? "（默认）" : "") + (p.healthy == false ? " ⚠︎" : ""))
-                                    .tag(Optional(p.id))
+                                Button(p.name + (p.isDefault ? "（默认）" : "") + (p.healthy == false ? " ⚠︎" : "")) {
+                                    cfg.providerId = p.id; testResult = nil
+                                }
                             }
                         }
-                        .labelsHidden()
-                        .onChange(of: cfg.providerId) { _, _ in testResult = nil }
 
                         Button { runTest() } label: {
                             HStack(spacing: 5) {
@@ -296,20 +296,23 @@ struct MetaAgentPicker: View {
     @ObservedObject var prefs = Prefs.shared
     var body: some View {
         HStack(spacing: 8) {
-            Picker("", selection: $prefs.metaAgentId) {
+            MenuField(label: AgentCatalog.spec(prefs.metaAgentId).name
+                        + (app.isInstalled(prefs.metaAgentId) ? "" : "（未装）"),
+                      width: 150) {
                 ForEach(AgentCatalog.all) { a in
-                    Text(a.name + (app.isInstalled(a.id) ? "" : "（未装）")).tag(a.id)
+                    Button(a.name + (app.isInstalled(a.id) ? "" : "（未装）")) {
+                        prefs.metaAgentId = a.id; prefs.metaModel = ""; prefs.metaProviderId = ""
+                    }
                 }
             }
-            .labelsHidden().frame(width: 140)
-            .onChange(of: prefs.metaAgentId) { _, _ in prefs.metaModel = ""; prefs.metaProviderId = "" }
             ModelField(model: $prefs.metaModel, suggestions: app.models(for: prefs.metaAgentId)).frame(width: 150)
             let provs = app.providers(for: prefs.metaAgentId)
             if !provs.isEmpty {
-                Picker("", selection: $prefs.metaProviderId) {
-                    Text("默认").tag("")
-                    ForEach(provs) { p in Text(p.name).tag(p.id) }
-                }.labelsHidden().frame(width: 120)
+                MenuField(label: provs.first(where: { $0.id == prefs.metaProviderId })?.name ?? "默认",
+                          width: 130) {
+                    Button("默认") { prefs.metaProviderId = "" }
+                    ForEach(provs) { p in Button(p.name) { prefs.metaProviderId = p.id } }
+                }
             }
         }
     }

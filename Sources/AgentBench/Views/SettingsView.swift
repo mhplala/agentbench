@@ -8,7 +8,6 @@ struct SettingsView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            header
             ScrollView {
                 VStack(alignment: .leading, spacing: 24) {
 
@@ -144,30 +143,19 @@ struct SettingsView: View {
             }
         }
         .background(Theme.bg)
+        .navigationTitle("设置")
         .onExitCommand { app.selectLive() }
+        .toolbar {
+            ToolbarItem(placement: .primaryAction) {
+                Button { app.selectLive() } label: {
+                    HStack(spacing: 6) { Image(systemName: "checkmark"); Text("完成") }
+                }
+                .help("返回（Esc）")
+            }
+        }
         .sheet(isPresented: $showAssistant) {
             ConfigAssistantView().environmentObject(app)
         }
-    }
-
-    // Always-visible header so closing settings never requires scrolling to the bottom.
-    private var header: some View {
-        HStack {
-            Text("设置").font(Theme.ui(20, .bold)).tracking(-0.3).foregroundStyle(Theme.ink)
-            Spacer()
-            Button { app.selectLive() } label: {
-                HStack(spacing: 6) { SFIcon(name: "x", size: 12); Text("完成").font(Theme.ui(13, .semibold)) }
-                    .foregroundStyle(Theme.ink)
-                    .padding(.horizontal, 13).padding(.vertical, 7)
-                    .background(Theme.panel)
-                    .overlay(RoundedRectangle(cornerRadius: Theme.rSm).stroke(Theme.line3, lineWidth: 1))
-                    .clipShape(RoundedRectangle(cornerRadius: Theme.rSm))
-            }
-            .buttonStyle(.plain).help("返回（Esc）")
-        }
-        .padding(.horizontal, 40).padding(.vertical, 14)
-        .background(Theme.panel.opacity(0.95))
-        .overlay(Rectangle().frame(height: 1).foregroundStyle(Theme.line), alignment: .bottom)
     }
 
     private func densitySeg(_ key: String, _ label: String) -> some View {

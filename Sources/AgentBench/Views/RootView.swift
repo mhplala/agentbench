@@ -13,10 +13,12 @@ struct RootView: View {
         } detail: {
             mainArea
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
+                // light theme is scoped to the content so the system sidebar/toolbar
+                // keep their native (glass) materials on Tahoe.
+                .environment(\.colorScheme, .light)
         }
-        .navigationSplitViewStyle(.balanced)
+        .navigationSplitViewStyle(.automatic)
         .frame(minWidth: 1040, minHeight: 700)
-        .environment(\.colorScheme, .light)
         .environment(\.density, DensityMetrics.from(prefs.density))
     }
 

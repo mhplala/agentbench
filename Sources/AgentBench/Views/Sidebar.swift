@@ -1,7 +1,10 @@
 import SwiftUI
 
-// Sidebar CONTENT only — the floating rounded vibrancy chrome (+ traffic lights
-// inside it) is provided natively by NavigationSplitView on macOS Tahoe.
+// Native sidebar: a `List` with `.listStyle(.sidebar)` so macOS Tahoe renders the
+// floating rounded inset chrome (and pulls the traffic lights inside it) for free.
+// Selection is drawn ourselves via a custom row background — the native sidebar pill
+// forces the saturated system-accent blue regardless of `.tint`, which clashes with
+// the monochrome design, so we opt out of it and paint a calm neutral pill instead.
 struct Sidebar: View {
     @EnvironmentObject var app: AppState
 
@@ -12,8 +15,30 @@ struct Sidebar: View {
     }
 
     var body: some View {
-        VStack(spacing: 0) {
-            // brand
+        List {
+            Section {
+                currentRow
+                    .rowSelect(app.activeId == "live") { app.activeId = "live" }
+            } header: { Text("当前") }
+
+            ForEach(groups, id: \.0) { (label, items) in
+                Section {
+                    ForEach(items) { s in
+                        archivedRow(s)
+                            .rowSelect(app.activeId == s.id) { app.activeId = s.id }
+                    }
+                } header: { Text(label) }
+            }
+        }
+        .listStyle(.sidebar)
+        .environment(\.defaultMinListRowHeight, 30)
+        .safeAreaInset(edge: .top, spacing: 0) { brandHeader }
+        .safeAreaInset(edge: .bottom, spacing: 0) { settingsFooter }
+    }
+
+    // MARK: brand + new comparison (top)
+    private var brandHeader: some View {
+        VStack(spacing: 10) {
             HStack(spacing: 8) {
                 Text("▚").font(.system(size: 15))
                 Text("AgentBench").font(Theme.ui(14.5, .bold)).tracking(-0.3)
@@ -21,9 +46,7 @@ struct Sidebar: View {
                 Spacer(minLength: 0)
             }
             .foregroundStyle(Theme.ink)
-            .padding(.horizontal, 10).padding(.top, 2).padding(.bottom, 10)
 
-            // new comparison
             Button { app.newComparison() } label: {
                 HStack(spacing: 8) {
                     SFIcon(name: "plus", size: 15)
@@ -37,23 +60,13 @@ struct Sidebar: View {
                 .clipShape(RoundedRectangle(cornerRadius: Theme.rSm))
             }
             .buttonStyle(.plain)
-            .padding(.horizontal, 10).padding(.bottom, 8)
+        }
+        .padding(.horizontal, 12).padding(.top, 4).padding(.bottom, 8)
+    }
 
-            // sessions
-            ScrollView {
-                VStack(alignment: .leading, spacing: 14) {
-                    group(label: "当前") { currentRow }
-                    ForEach(groups, id: \.0) { (label, items) in
-                        group(label: label) {
-                            ForEach(items) { s in archivedRow(s) }
-                        }
-                    }
-                }
-                .padding(.horizontal, 6).padding(.bottom, 12)
-            }
-            .scrollContentBackground(.hidden)
-
-            Spacer(minLength: 0)
+    // MARK: settings (bottom)
+    private var settingsFooter: some View {
+        VStack(spacing: 0) {
             Divider()
             Button { app.activeId = "settings" } label: {
                 HStack(spacing: 9) {
@@ -61,65 +74,46 @@ struct Sidebar: View {
                     Text("设置").font(Theme.ui(13, .medium))
                     Spacer()
                 }
-                .foregroundStyle(Theme.ink2)
-                .padding(8)
+                .foregroundStyle(app.activeId == "settings" ? Theme.ink : Theme.ink2)
+                .padding(.vertical, 8).padding(.horizontal, 10)
                 .frame(maxWidth: .infinity, alignment: .leading)
             }
             .buttonStyle(.plain)
-            .padding(.horizontal, 10).padding(.vertical, 6)
+            .padding(.horizontal, 8).padding(.vertical, 6)
         }
     }
 
-    @ViewBuilder private func group<C: View>(label: String, @ViewBuilder _ content: () -> C) -> some View {
-        VStack(alignment: .leading, spacing: 1) {
-            Text(label).font(Theme.ui(10.5, .bold)).tracking(1.0).foregroundStyle(Theme.ink3)
-                .padding(.horizontal, 8).padding(.top, 8).padding(.bottom, 6)
-            content()
-        }
-    }
-
+    // MARK: rows
     private var currentRow: some View {
-        let on = app.activeId == "live"
-        return Button { app.selectLive() } label: {
-            HStack(alignment: .top, spacing: 10) {
-                Circle().fill(Theme.good).frame(width: 8, height: 8)
-                    .overlay(Circle().stroke(Theme.good.opacity(0.25), lineWidth: 3))
-                    .padding(.top, 5).padding(.horizontal, 6)
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(app.live.task.isEmpty ? "新建对比" : app.live.task)
-                        .font(Theme.ui(13, .medium)).foregroundStyle(Theme.ink)
-                        .lineLimit(1).truncationMode(.tail)
-                    Text(app.live.configs.map { AgentCatalog.spec($0.agentId).name }.joined(separator: " · "))
-                        .font(Theme.mono(10.5)).foregroundStyle(Theme.ink3).lineLimit(1)
-                }
+        HStack(alignment: .top, spacing: 10) {
+            Circle().fill(Theme.good).frame(width: 8, height: 8)
+                .overlay(Circle().stroke(Theme.good.opacity(0.25), lineWidth: 3))
+                .padding(.top, 5).padding(.horizontal, 2)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(app.live.task.isEmpty ? "新建对比" : app.live.task)
+                    .font(Theme.ui(13, .medium)).foregroundStyle(Theme.ink)
+                    .lineLimit(1).truncationMode(.tail)
+                Text(app.live.configs.map { AgentCatalog.spec($0.agentId).name }.joined(separator: " · "))
+                    .font(Theme.mono(10.5)).foregroundStyle(Theme.ink3).lineLimit(1)
             }
-            .padding(9)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .background(on ? Color(hex: 0x14141A, alpha: 0.08) : .clear)
-            .clipShape(RoundedRectangle(cornerRadius: Theme.rSm))
         }
-        .buttonStyle(.plain)
+        .padding(.vertical, 3)
+        .contentShape(Rectangle())
     }
 
     private func archivedRow(_ s: Session) -> some View {
-        let on = app.activeId == s.id
         let winner = s.verdict?.winner ?? (s.vote ?? "tie")
-        return Button { app.activeId = s.id } label: {
-            HStack(alignment: .top, spacing: 10) {
-                winBadge(winner)
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(s.task).font(Theme.ui(13, .medium)).foregroundStyle(Theme.ink)
-                        .lineLimit(1).truncationMode(.tail)
-                    Text(s.configs.map { AgentCatalog.spec($0.agentId).name }.joined(separator: " · ") + " · \(s.dateLabel)")
-                        .font(Theme.mono(10.5)).foregroundStyle(Theme.ink3).lineLimit(1)
-                }
+        return HStack(alignment: .top, spacing: 10) {
+            winBadge(winner)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(s.task).font(Theme.ui(13, .medium)).foregroundStyle(Theme.ink)
+                    .lineLimit(1).truncationMode(.tail)
+                Text(s.configs.map { AgentCatalog.spec($0.agentId).name }.joined(separator: " · ") + " · \(s.dateLabel)")
+                    .font(Theme.mono(10.5)).foregroundStyle(Theme.ink3).lineLimit(1)
             }
-            .padding(9)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .background(on ? Color(hex: 0x14141A, alpha: 0.08) : .clear)
-            .clipShape(RoundedRectangle(cornerRadius: Theme.rSm))
         }
-        .buttonStyle(.plain)
+        .padding(.vertical, 3)
+        .contentShape(Rectangle())
         .contextMenu {
             Button("以此重跑") { app.rerun(from: s) }
             Button("删除", role: .destructive) { app.deleteSession(s.id) }
@@ -136,5 +130,19 @@ struct Sidebar: View {
             .overlay(RoundedRectangle(cornerRadius: 6).stroke(tie ? Theme.line3 : .clear, lineWidth: 1))
             .clipShape(RoundedRectangle(cornerRadius: 6))
             .padding(.top, 1)
+    }
+}
+
+private extension View {
+    // Custom sidebar selection: a calm neutral pill + tap-to-select, replacing the
+    // native system-blue highlight. Inset slightly to read as a floating pill.
+    func rowSelect(_ selected: Bool, _ action: @escaping () -> Void) -> some View {
+        listRowBackground(
+            RoundedRectangle(cornerRadius: 7)
+                .fill(selected ? Theme.selection : Color.clear)
+                .padding(.horizontal, 6).padding(.vertical, 1)
+        )
+        .contentShape(Rectangle())
+        .onTapGesture(perform: action)
     }
 }

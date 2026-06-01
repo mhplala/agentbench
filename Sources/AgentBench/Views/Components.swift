@@ -272,6 +272,40 @@ struct WarningBanner: View {
     }
 }
 
+// Dropdown styled to match the app's custom fields (ModelField / TextField) so
+// selectors don't mix the native macOS pop-up bezel with the custom field look.
+// Same padding/height/stroke as ModelField → controls line up when placed in a row.
+struct MenuField<MenuContent: View>: View {
+    let label: String
+    var width: CGFloat? = nil
+    var mono: Bool = false
+    var help: String? = nil
+    @ViewBuilder var menu: () -> MenuContent
+
+    var body: some View {
+        Menu {
+            menu()
+        } label: {
+            HStack(spacing: 6) {
+                Text(label)
+                    .font(mono ? Theme.mono(12.5) : Theme.ui(13))
+                    .foregroundStyle(Theme.ink)
+                    .lineLimit(1).truncationMode(.tail)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                SFIcon(name: "chevronD", size: 11).foregroundStyle(Theme.ink3)
+            }
+            .padding(.horizontal, 12).padding(.vertical, 9)
+            .frame(width: width)
+            .background(Theme.panel2)
+            .overlay(RoundedRectangle(cornerRadius: Theme.rSm).stroke(Theme.line3, lineWidth: 1))
+            .clipShape(RoundedRectangle(cornerRadius: Theme.rSm))
+        }
+        .menuStyle(.borderlessButton)
+        .menuIndicator(.hidden)
+        .help(help ?? "")
+    }
+}
+
 // Icon-only command button with a tooltip — the desktop-app idiom the toolbar
 // leaned away from with text pills.
 struct IconButton: View {

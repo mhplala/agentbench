@@ -7,7 +7,6 @@ struct WorkspaceView: View {
     var body: some View {
         ZStack {
             VStack(spacing: 0) {
-                WorkBar()
                 Convo()
                 if !running {
                     FollowupComposer()
@@ -18,50 +17,41 @@ struct WorkspaceView: View {
             if app.compareOpen { CompareOverlay().transition(.opacity) }
         }
         .animation(.easeInOut(duration: 0.2), value: app.compareOpen)
+        .navigationTitle(app.live.task.isEmpty ? "对比" : app.live.task)
+        .toolbar { workspaceToolbar }
     }
-}
 
-struct WorkBar: View {
-    @EnvironmentObject var app: AppState
-    private var running: Bool { app.livePhase == .running }
-
-    var body: some View {
-        HStack(spacing: 16) {
-            Text(app.live.task).font(Theme.ui(15, .semibold)).tracking(-0.1)
-                .foregroundStyle(Theme.ink).lineLimit(1).truncationMode(.tail)
-                .frame(maxWidth: .infinity, alignment: .leading)
-            HStack(spacing: 12) {
-                ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(spacing: 9) {
-                        ForEach(app.live.configs.indices, id: \.self) { i in
-                            if i > 0 { Text("vs").font(Theme.mono(10)).foregroundStyle(Theme.ink3) }
-                            AgentTag(agentId: app.live.configs[i].agentId, model: app.live.configs[i].model, lane: i)
-                        }
+    @ToolbarContentBuilder
+    private var workspaceToolbar: some ToolbarContent {
+        ToolbarItem(placement: .principal) {
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 9) {
+                    ForEach(app.live.configs.indices, id: \.self) { i in
+                        if i > 0 { Text("vs").font(Theme.mono(10)).foregroundStyle(Theme.ink3) }
+                        AgentTag(agentId: app.live.configs[i].agentId, model: app.live.configs[i].model, lane: i)
                     }
                 }
-                .frame(maxWidth: app.live.laneCount > 2 ? 720 : 520)
-
-                // command actions as icon buttons + tooltips (desktop-app idiom)
-                if !running && app.live.judgeOn {
-                    IconButton(icon: "gavel", help: "自动裁判", prominent: app.judgeOpen,
-                               tint: app.accentColor) { app.judgeOpen.toggle() }
-                }
-                if app.livePhase == .done {
-                    IconButton(icon: "send", help: "导出 trace / 日志 / 指标 / 裁判到文件夹") {
-                        Exporter.exportWithPanel(app.live)
-                    }
-                }
-                if running {
-                    IconButton(icon: "x", help: "停止运行") { app.cancelRun() }
-                } else {
-                    IconButton(icon: "refresh", help: "重跑") { app.runComparison() }
-                        .disabled(!app.canRun())
-                }
+                .padding(.vertical, 2)
+            }
+            .frame(maxWidth: app.live.laneCount > 2 ? 640 : 460)
+        }
+        ToolbarItemGroup(placement: .primaryAction) {
+            if !running && app.live.judgeOn {
+                Button { app.judgeOpen.toggle() } label: { Image(systemName: "hammer.fill") }
+                    .help("自动裁判")
+            }
+            if app.livePhase == .done {
+                Button { Exporter.exportWithPanel(app.live) } label: { Image(systemName: "square.and.arrow.up") }
+                    .help("导出 trace / 日志 / 指标 / 裁判到文件夹")
+            }
+            if running {
+                Button { app.cancelRun() } label: { Image(systemName: "stop.fill") }
+                    .help("停止运行")
+            } else {
+                Button { app.runComparison() } label: { Image(systemName: "arrow.clockwise") }
+                    .help("重跑").disabled(!app.canRun())
             }
         }
-        .padding(.horizontal, 22).frame(height: 58)
-        .background(Theme.panel.opacity(0.95))
-        .overlay(Rectangle().frame(height: 1).foregroundStyle(Theme.line), alignment: .bottom)
     }
 }
 

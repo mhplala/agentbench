@@ -52,6 +52,11 @@ enum Theme {
     // accent isn't smeared across every filled surface.
     static let identity = Color(hex: 0x16161A)
 
+    // sidebar list selection: a soft neutral pill (not the saturated system blue),
+    // so the monochrome rows read calmly and the dark row text stays legible. Solid
+    // light gray reads correctly whether the system draws it opaque or over vibrancy.
+    static let selection = Color(hex: 0xDDDDE2)
+
     static let accentChoices: [UInt32] = [0x111111, 0x5B61D6, 0x2563EB, 0x16A34A]
 }
 

@@ -39,7 +39,10 @@ struct ArchiveLaneColumn: View {
             .background(Theme.panel2)
             .overlay(Rectangle().frame(height: 1).foregroundStyle(Theme.line2), alignment: .bottom)
 
-            VStack(alignment: .leading, spacing: 12) {
+            // Lazy: only build turn views as they scroll into the enclosing
+            // ScrollView's viewport — a long session (hundreds of turns + several
+            // WKWebView previews) otherwise builds everything at once and freezes.
+            LazyVStack(alignment: .leading, spacing: 12) {
                 if let err = run.error, run.status == .failed {
                     Text(err).font(Theme.mono(11.5)).foregroundStyle(Theme.bad)
                         .textSelection(.enabled)

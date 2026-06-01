@@ -4,47 +4,12 @@ import SwiftUI
 struct ArchiveView: View {
     @EnvironmentObject var app: AppState
     let session: Session
+    @State private var revealed = false
 
     private func w(_ x: String) -> String { x == "tie" ? "平局" : "Agent \(x)" }
 
     var body: some View {
         VStack(spacing: 0) {
-            // workbar
-            HStack(spacing: 18) {
-                Text(session.task).font(Theme.ui(15, .semibold))
-                    .foregroundStyle(Theme.ink).lineLimit(1)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                HStack(spacing: 14) {
-                    ScrollView(.horizontal, showsIndicators: false) {
-                        HStack(spacing: 9) {
-                            ForEach(session.configs.indices, id: \.self) { i in
-                                if i > 0 { Text("vs").font(Theme.mono(11)).foregroundStyle(Theme.ink3) }
-                                AgentTag(agentId: session.configs[i].agentId, model: session.configs[i].model, lane: i)
-                            }
-                        }
-                    }.frame(maxWidth: 380)
-                    Button { Exporter.exportWithPanel(session) } label: {
-                        HStack(spacing: 7) { SFIcon(name: "send", size: 15); Text("导出").font(Theme.ui(13, .semibold)) }
-                            .foregroundStyle(Theme.ink)
-                            .padding(.horizontal, 12).padding(.vertical, 7)
-                            .background(Theme.panel)
-                            .overlay(RoundedRectangle(cornerRadius: Theme.rSm).stroke(Theme.line3, lineWidth: 1))
-                            .clipShape(RoundedRectangle(cornerRadius: Theme.rSm))
-                    }.buttonStyle(.plain).help("导出整个 trace 与 log 到文件夹")
-                    Button { app.rerun(from: session) } label: {
-                        HStack(spacing: 7) { SFIcon(name: "refresh", size: 15); Text("以此重跑").font(Theme.ui(13, .semibold)) }
-                            .foregroundStyle(Theme.ink)
-                            .padding(.horizontal, 12).padding(.vertical, 7)
-                            .background(Theme.panel)
-                            .overlay(RoundedRectangle(cornerRadius: Theme.rSm).stroke(Theme.line3, lineWidth: 1))
-                            .clipShape(RoundedRectangle(cornerRadius: Theme.rSm))
-                    }.buttonStyle(.plain)
-                }
-            }
-            .padding(.horizontal, 22).frame(height: 58)
-            .background(Theme.panel.opacity(0.95))
-            .overlay(Rectangle().frame(height: 1).foregroundStyle(Theme.line), alignment: .bottom)
-
             ScrollView {
                 VStack(alignment: .leading, spacing: 16) {
                     HStack(spacing: 8) {
@@ -112,12 +77,66 @@ struct ArchiveView: View {
                         Text("对话转录").font(Theme.ui(11, .bold)).tracking(1.2).foregroundStyle(Theme.ink3)
                     }
                     .padding(.top, 6)
-                    ArchiveTranscript(session: session)
+                    if revealed {
+                        ArchiveTranscript(session: session)
+                    } else {
+                        transcriptPlaceholder
+                    }
                 }
                 .frame(maxWidth: 1100).frame(maxWidth: .infinity)
                 .padding(.horizontal, 22).padding(.vertical, 24)
             }
             .background(Theme.bg)
+        }
+        .navigationTitle(session.task)
+        .navigationSubtitle("存档 · 只读")
+        .toolbar { archiveToolbar }
+        // Paint the chrome (metrics / verdict) immediately, then build the heavy
+        // transcript one beat later so selecting a history item never blocks the UI.
+        .task(id: session.id) {
+            revealed = false
+            try? await Task.sleep(nanoseconds: 50_000_000)   // ~a frame; let chrome show first
+            revealed = true
+        }
+    }
+
+    private var transcriptPlaceholder: some View {
+        VStack(spacing: 12) {
+            HStack(spacing: 8) {
+                Spinner(size: 14)
+                Text("加载转录…").font(Theme.ui(12.5)).foregroundStyle(Theme.ink3)
+            }
+            .frame(maxWidth: .infinity, alignment: .center).padding(.top, 8)
+            HStack(alignment: .top, spacing: 16) {
+                ForEach(session.configs.indices, id: \.self) { _ in
+                    RoundedRectangle(cornerRadius: Theme.r)
+                        .fill(Theme.panel)
+                        .overlay(RoundedRectangle(cornerRadius: Theme.r).stroke(Theme.line, lineWidth: 1))
+                        .frame(height: 220).frame(maxWidth: .infinity)
+                }
+            }
+        }
+    }
+
+    @ToolbarContentBuilder
+    private var archiveToolbar: some ToolbarContent {
+        ToolbarItem(placement: .principal) {
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 9) {
+                    ForEach(session.configs.indices, id: \.self) { i in
+                        if i > 0 { Text("vs").font(Theme.mono(10)).foregroundStyle(Theme.ink3) }
+                        AgentTag(agentId: session.configs[i].agentId, model: session.configs[i].model, lane: i)
+                    }
+                }
+                .padding(.vertical, 2)
+            }
+            .frame(maxWidth: session.configs.count > 2 ? 640 : 460)
+        }
+        ToolbarItemGroup(placement: .primaryAction) {
+            Button { Exporter.exportWithPanel(session) } label: { Image(systemName: "square.and.arrow.up") }
+                .help("导出整个 trace 与 log 到文件夹")
+            Button { app.rerun(from: session) } label: { Image(systemName: "arrow.clockwise") }
+                .help("以此重跑")
         }
     }
 
