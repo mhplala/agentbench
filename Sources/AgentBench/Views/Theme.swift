@@ -104,10 +104,11 @@ extension Color {
 // single artifact card). Softened from the prototype so stacked panels don't
 // read as a mock-up of cards-on-cards.
 struct CardShadow: ViewModifier {
+    // Single shadow pass — two stacked .shadow() modifiers force two offscreen
+    // rasterizations per card, which is a visible scroll-perf cost on long pages.
     func body(content: Content) -> some View {
         content
-            .shadow(color: Color(hex: 0x14141A, alpha: 0.035), radius: 1, x: 0, y: 1)
-            .shadow(color: Color(hex: 0x14141A, alpha: 0.04), radius: 7, x: 0, y: 4)
+            .shadow(color: Color(hex: 0x14141A, alpha: 0.06), radius: 6, x: 0, y: 3)
     }
 }
 extension View {

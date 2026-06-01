@@ -65,7 +65,9 @@ struct ArchiveLaneColumn: View {
         .background(Theme.panel)
         .clipShape(RoundedRectangle(cornerRadius: Theme.r))
         .overlay(RoundedRectangle(cornerRadius: Theme.r).stroke(Theme.line, lineWidth: 1))
-        .cardShadow()
+        // No cardShadow here: this column spans the full conversation height, so a
+        // shadow over its bounds rasterizes a huge offscreen layer on every scroll
+        // frame. The hairline border carries the separation instead.
     }
 
     @ViewBuilder private var statusView: some View {
