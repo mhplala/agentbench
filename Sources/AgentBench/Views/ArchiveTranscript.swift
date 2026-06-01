@@ -39,10 +39,14 @@ struct ArchiveLaneColumn: View {
             .background(Theme.panel2)
             .overlay(Rectangle().frame(height: 1).foregroundStyle(Theme.line2), alignment: .bottom)
 
-            // Lazy: only build turn views as they scroll into the enclosing
-            // ScrollView's viewport — a long session (hundreds of turns + several
-            // WKWebView previews) otherwise builds everything at once and freezes.
-            LazyVStack(alignment: .leading, spacing: 12) {
+            // Eager VStack (not Lazy): a LazyVStack nested in this HStack-of-columns
+            // re-estimates its height as rows realize during scroll, so the total
+            // content height — and the scrollbar thumb — jumps and stutters. The
+            // rows here are mostly cheap text (tool/think/user); the only heavy bit
+            // is the few WKWebView answer previews, and those are already deferred
+            // per-card (mountPreview), so building eagerly stays cheap and the
+            // measured height is stable → smooth scrolling.
+            VStack(alignment: .leading, spacing: 12) {
                 if let err = run.error, run.status == .failed {
                     Text(err).font(Theme.mono(11.5)).foregroundStyle(Theme.bad)
                         .textSelection(.enabled)
