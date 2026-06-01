@@ -34,8 +34,24 @@ struct Turn: Codable, Hashable, Identifiable {
     var summary: String = ""
     var files: [FileChange] = []
     var code: String = ""            // primary code / unified diff to show in "代码"
+    var codeLines: Int = 0           // cached line count of `code` (avoid re-splitting big diffs in views)
     var previewHTML: String? = nil   // renderable artifact, if any
     var previewPath: String? = nil   // file path that produced the preview
+
+    // Line count for the "N 行" label. Uses the cached value when present; falls
+    // back to an allocation-free, capped newline scan for legacy/decoded turns
+    // (never .components(separatedBy:) which allocates the whole split array).
+    var codeLineCount: Int {
+        if codeLines > 0 { return codeLines }
+        if code.isEmpty { return 0 }
+        var n = 1, scanned = 0
+        for u in code.utf8 {
+            if u == 0x0A { n += 1 }
+            scanned += 1
+            if scanned > 500_000 { break }   // cap: don't scan pathologically huge diffs
+        }
+        return n
+    }
 }
 
 struct FileChange: Codable, Hashable, Identifiable {
@@ -147,6 +163,10 @@ struct Session: Codable, Hashable, Identifiable {
     var finishedAt: Date? = nil
 
     var laneCount: Int { configs.count }
+    // Safe lane indices for views: configs and runs can momentarily desync
+    // (imported/exported JSON, transient mutations), and indexing runs[i] off
+    // configs.indices would crash. Always iterate the intersection.
+    var laneIndices: Range<Int> { 0..<min(configs.count, runs.count) }
     var isArchived: Bool { finishedAt != nil }
 
     // Sidebar grouping label, derived from createdAt.

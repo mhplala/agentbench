@@ -27,6 +27,10 @@ struct ConvoColumn: View {
                 if let err = run.error, run.status == .failed {
                     errorBox(err)
                 }
+                if visibleTurns.isEmpty && !working && run.error == nil {
+                    EmptyState(icon: "read", title: "无转录记录",
+                               message: "这次运行没有产生可显示的对话步骤")
+                }
                 ForEach(visibleTurns) { turn in
                     TurnView(turn: turn, lane: lane)
                 }
@@ -253,15 +257,25 @@ struct ArtifactViewer: View {
 
     private var diffMap: [DiffMark]? { app.diffMap(lane) }
 
+    private var canOpenInBrowser: Bool {
+        guard turn.previewHTML != nil,
+              app.live.runs.indices.contains(lane),
+              let f = app.live.runs[lane].previewFileURL else { return false }
+        return FileManager.default.fileExists(atPath: f.path)
+    }
+
     var body: some View {
         VStack(spacing: 0) {
             HStack(spacing: 8) {
                 Segmented(view: $app.artifactView)
                 Spacer()
-                Text(app.artifactView == "code" ? "\(turn.code.components(separatedBy: "\n").count) 行"
+                Text(app.artifactView == "code" ? "\(turn.codeLineCount) 行"
                                                  : (turn.previewHTML == nil ? "无可渲染预览" : "渲染产物"))
                     .font(Theme.mono(10.5)).foregroundStyle(Theme.ink3)
-                if turn.previewHTML != nil {
+                // only offer "open in browser" when there's an actual file on disk to
+                // open — openInBrowser needs previewFileURL, so an inline-only preview
+                // would make the button a no-op.
+                if canOpenInBrowser {
                     IconButton(icon: "browser", help: "在浏览器打开", size: 13) { app.openInBrowser(lane) }
                 }
                 IconButton(icon: "expand", help: "放大对比", size: 13) { app.compareOpen = true }

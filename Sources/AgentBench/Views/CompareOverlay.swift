@@ -24,7 +24,7 @@ struct CompareOverlay: View {
 
             // grid (N panes)
             HStack(spacing: 0) {
-                ForEach(app.live.configs.indices, id: \.self) { i in
+                ForEach(app.live.laneIndices, id: \.self) { i in
                     if i > 0 { Rectangle().frame(width: 1).foregroundStyle(Theme.line) }
                     pane(lane: i)
                 }
@@ -103,11 +103,12 @@ struct Segmented: View {
         .padding(3).background(Theme.panel2)
         .overlay(RoundedRectangle(cornerRadius: Theme.rSm).stroke(Theme.line2, lineWidth: 1))
         .clipShape(RoundedRectangle(cornerRadius: Theme.rSm))
+        .fixedSize()   // keep its natural size — never let a cramped header squish it
     }
     private func seg(_ key: String, _ label: String) -> some View {
         let on = view == key
         return Button { view = key } label: {
-            Text(label).font(Theme.ui(12.5, .semibold))
+            Text(label).font(Theme.ui(12.5, .semibold)).fixedSize()
                 .foregroundStyle(on ? Theme.ink : Theme.ink2)
                 .padding(.horizontal, 13).padding(.vertical, 5)
                 .background(on ? Theme.panel : .clear)

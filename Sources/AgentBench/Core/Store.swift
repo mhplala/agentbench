@@ -64,11 +64,21 @@ enum Store {
     // Read the complete raw log for a run: the externalized sidecar if present,
     // otherwise the inline field (small logs that were never externalized).
     static func fullRawLog(_ run: RunResult) -> String {
-        if let rel = run.rawLogPath,
-           let full = try? String(contentsOf: dir.appendingPathComponent(rel), encoding: .utf8) {
+        if let rel = run.rawLogPath, let url = safeLogURL(rel),
+           let full = try? String(contentsOf: url, encoding: .utf8) {
             return full
         }
         return run.rawLog
+    }
+
+    // Resolve a stored relative log path under `dir`, rejecting anything that
+    // escapes it (e.g. a malformed/imported "../secret"). Only paths that remain
+    // inside Store.dir are returned.
+    private static func safeLogURL(_ rel: String) -> URL? {
+        let root = dir.standardizedFileURL
+        let candidate = root.appendingPathComponent(rel).standardizedFileURL
+        let rootPath = root.path.hasSuffix("/") ? root.path : root.path + "/"
+        return candidate.path.hasPrefix(rootPath) ? candidate : nil
     }
 }
 

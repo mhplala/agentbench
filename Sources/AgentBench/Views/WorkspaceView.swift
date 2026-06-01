@@ -24,16 +24,14 @@ struct WorkspaceView: View {
     @ToolbarContentBuilder
     private var workspaceToolbar: some ToolbarContent {
         ToolbarItem(placement: .principal) {
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 9) {
-                    ForEach(app.live.configs.indices, id: \.self) { i in
-                        if i > 0 { Text("vs").font(Theme.mono(10)).foregroundStyle(Theme.ink3) }
-                        AgentTag(agentId: app.live.configs[i].agentId, model: app.live.configs[i].model, lane: i)
-                    }
+            HStack(spacing: 9) {
+                ForEach(app.live.configs.indices, id: \.self) { i in
+                    if i > 0 { Text("vs").font(Theme.mono(10)).foregroundStyle(Theme.ink3) }
+                    AgentTag(agentId: app.live.configs[i].agentId, model: app.live.configs[i].model, lane: i)
                 }
-                .padding(.vertical, 2)
             }
-            .frame(maxWidth: app.live.laneCount > 2 ? 640 : 460)
+            .padding(.horizontal, 14).padding(.vertical, 5)
+            .frame(maxWidth: app.live.laneCount > 2 ? 680 : 460)
         }
         ToolbarItemGroup(placement: .primaryAction) {
             if !running && app.live.judgeOn {
@@ -73,7 +71,7 @@ struct Convo: View {
                         .panel(fill: Theme.panel2)   // flat prompt panel, no shadow
                 }
                 HStack(alignment: .top, spacing: density.colGap) {
-                    ForEach(app.live.configs.indices, id: \.self) { i in
+                    ForEach(app.live.laneIndices, id: \.self) { i in
                         ConvoColumn(run: app.live.runs[i], cfg: app.live.configs[i], lane: i)
                     }
                 }
@@ -147,7 +145,7 @@ struct ActionBar: View {
         HStack(alignment: .center, spacing: 18) {
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 12) {
-                    ForEach(app.live.configs.indices, id: \.self) { i in
+                    ForEach(app.live.laneIndices, id: \.self) { i in
                         if i > 0 { Rectangle().frame(width: 1, height: 24).foregroundStyle(Theme.line) }
                         laneMetrics(i)
                     }

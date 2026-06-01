@@ -106,6 +106,7 @@ enum AgentRunner {
             summary: summary,
             files: changes.files,
             code: changes.primaryCode,
+            codeLines: changes.codeLines,
             previewHTML: changes.previewHTML,
             previewPath: changes.previewPath
         )
@@ -192,7 +193,8 @@ enum AgentRunner {
             ? (changes.files.isEmpty ? "（本轮无可见输出）" : "已根据后续指令更新。")
             : answerTrimmed
         newTurns.append(Turn(kind: .answer, summary: summary, files: changes.files,
-                             code: changes.primaryCode, previewHTML: changes.previewHTML,
+                             code: changes.primaryCode, codeLines: changes.codeLines,
+                             previewHTML: changes.previewHTML,
                              previewPath: changes.previewPath))
 
         // accumulate metrics across rounds

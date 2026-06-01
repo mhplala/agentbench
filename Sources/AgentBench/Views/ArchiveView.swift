@@ -25,7 +25,7 @@ struct ArchiveView: View {
 
                     // metrics strip (N lanes)
                     HStack(alignment: .top, spacing: 16) {
-                        ForEach(session.configs.indices, id: \.self) { i in
+                        ForEach(session.laneIndices, id: \.self) { i in
                             if i > 0 { Rectangle().frame(width: 1).foregroundStyle(Theme.line) }
                             metricCol(i, session.runs[i], session.configs[i], session.runs.map { $0.metrics })
                         }
@@ -121,16 +121,14 @@ struct ArchiveView: View {
     @ToolbarContentBuilder
     private var archiveToolbar: some ToolbarContent {
         ToolbarItem(placement: .principal) {
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 9) {
-                    ForEach(session.configs.indices, id: \.self) { i in
-                        if i > 0 { Text("vs").font(Theme.mono(10)).foregroundStyle(Theme.ink3) }
-                        AgentTag(agentId: session.configs[i].agentId, model: session.configs[i].model, lane: i)
-                    }
+            HStack(spacing: 9) {
+                ForEach(session.configs.indices, id: \.self) { i in
+                    if i > 0 { Text("vs").font(Theme.mono(10)).foregroundStyle(Theme.ink3) }
+                    AgentTag(agentId: session.configs[i].agentId, model: session.configs[i].model, lane: i)
                 }
-                .padding(.vertical, 2)
             }
-            .frame(maxWidth: session.configs.count > 2 ? 640 : 460)
+            .padding(.horizontal, 14).padding(.vertical, 5)
+            .frame(maxWidth: session.configs.count > 2 ? 680 : 460)
         }
         ToolbarItemGroup(placement: .primaryAction) {
             Button { Exporter.exportWithPanel(session) } label: { Image(systemName: "square.and.arrow.up") }

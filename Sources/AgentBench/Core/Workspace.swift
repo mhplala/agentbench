@@ -12,6 +12,14 @@ enum Workspace {
         var previewHTML: String?      // renderable artifact
         var previewPath: String?
         var linesAdded: Int
+        // line count of primaryCode, computed once (allocation-free) so views don't
+        // re-split a huge diff on every render
+        var codeLines: Int {
+            if primaryCode.isEmpty { return 0 }
+            var n = 1
+            for u in primaryCode.utf8 where u == 0x0A { n += 1 }
+            return n
+        }
     }
 
     static var runsRoot: URL {

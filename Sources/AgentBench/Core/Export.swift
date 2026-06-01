@@ -42,42 +42,39 @@ enum Exporter {
         let fm = FileManager.default
         try fm.createDirectory(at: dir, withIntermediateDirectories: true)
 
-        // structured session (everything, machine-readable). Hydrate the full raw
-        // logs back inline: in normal storage they're externalized to sidecars and
-        // sessions.json only holds a tail marker — an export should be self-contained.
-        var hydrated = s
-        for i in hydrated.runs.indices {
-            hydrated.runs[i].rawLog = Store.fullRawLog(hydrated.runs[i])
-            hydrated.runs[i].rawLogPath = nil
-        }
-        let enc = JSONEncoder()
-        enc.dateEncodingStrategy = .iso8601
-        enc.outputFormatting = [.prettyPrinted, .sortedKeys, .withoutEscapingSlashes]
-        try enc.encode(hydrated).write(to: dir.appendingPathComponent("session.json"), options: .atomic)
-
-        // verdict (machine-readable), if any
-        if let v = s.verdict {
-            try enc.encode(v).write(to: dir.appendingPathComponent("verdict.json"), options: .atomic)
-        }
-
-        // per-lane raw log + readable transcript
+        // Write the full raw logs as standalone .log files and point the exported
+        // session.json at them by relative filename. We deliberately do NOT inline
+        // the full logs into the JSON — a long multi-agent run would balloon it and
+        // spike memory. The JSON keeps a small inline tail + a stable rawLogFile ref.
+        var exported = s
         for i in s.runs.indices {
             let run = s.runs[i]
             let cfg = s.configs.indices.contains(i) ? s.configs[i] : .empty
             let base = "\(Lane.label(i))-\(AgentCatalog.spec(cfg.agentId).id)"
-            // prefer the full externalized sidecar log; fall back to the inline tail
-            let dst = dir.appendingPathComponent("\(base).log")
-            if let rel = run.rawLogPath,
-               case let src = Store.dir.appendingPathComponent(rel),
-               fm.fileExists(atPath: src.path) {
-                try? fm.removeItem(at: dst)
-                try fm.copyItem(at: src, to: dst)
-            } else if !run.rawLog.isEmpty {
-                try run.rawLog.write(to: dst, atomically: true, encoding: .utf8)
+            let logName = "\(base).log"
+            let full = Store.fullRawLog(run)
+            if !full.isEmpty {
+                try full.write(to: dir.appendingPathComponent(logName), atomically: true, encoding: .utf8)
+                exported.runs[i].rawLogPath = logName               // self-contained reference within the bundle
+                exported.runs[i].rawLog = String(full.suffix(8 * 1024))  // small inline tail for quick scanning
+            } else {
+                exported.runs[i].rawLogPath = nil
+                exported.runs[i].rawLog = ""
             }
             try transcriptMarkdown(run: run, cfg: cfg, lane: i, task: s.task)
                 .write(to: dir.appendingPathComponent("\(base)-transcript.md"),
                        atomically: true, encoding: .utf8)
+        }
+
+        // structured session (machine-readable); logs referenced via rawLogPath
+        let enc = JSONEncoder()
+        enc.dateEncodingStrategy = .iso8601
+        enc.outputFormatting = [.prettyPrinted, .sortedKeys, .withoutEscapingSlashes]
+        try enc.encode(exported).write(to: dir.appendingPathComponent("session.json"), options: .atomic)
+
+        // verdict (machine-readable), if any
+        if let v = s.verdict {
+            try enc.encode(v).write(to: dir.appendingPathComponent("verdict.json"), options: .atomic)
         }
 
         // human-readable summary report
