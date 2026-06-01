@@ -183,6 +183,12 @@ enum ProcessRunner {
                 }
             }
         } onCancel: {
+            // Only signal a task that actually launched. Terminating a not-yet-launched
+            // (or already-finished) NSTask raises NSInvalidArgumentException → uncaught
+            // → SIGABRT. This handler races with proc.run() during bounded CLI probes
+            // (Detector.runBounded), so the guard is essential — it was crashing on
+            // launch (agent detection) on some machines.
+            guard proc.isRunning else { return }
             // SIGTERM first; a CLI that traps/ignores it would otherwise leave the
             // termination handler (and thus the awaiting task) hung forever. Escalate
             // to SIGKILL on the direct child after a grace period so the continuation
