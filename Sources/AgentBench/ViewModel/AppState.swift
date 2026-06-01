@@ -7,7 +7,6 @@ final class AppState: ObservableObject {
 
     @Published var availabilities: [AgentAvailability] = []
     @Published var scanned = false
-    @Published var ccProviders: [CCProvider] = []   // from cc-switch
 
     @Published var allSessions: [Session] = []
     @Published var live: Session
@@ -72,7 +71,6 @@ final class AppState: ObservableObject {
 
     func reloadAgents() { AgentCatalog.reload(); bootstrap() }
     func bootstrap() {
-        ccProviders = CCSwitch.loadProviders()
         Task {
             let avail = await Detector.scan()
             self.availabilities = avail
@@ -80,21 +78,17 @@ final class AppState: ObservableObject {
             self.applyDefaults()
         }
     }
-    func providers(for agentId: String) -> [CCProvider] { ccProviders.filter { $0.agentId == agentId } }
-    func provider(_ id: String?) -> CCProvider? { id.flatMap { id in ccProviders.first { $0.id == id } } }
-    // env injected for a lane = the agent's own recipe env (custom agents) overlaid
-    // with the selected cc-switch provider's env.
+    // env injected for a lane = the agent's own recipe env (custom agents carry
+    // their provider/relay creds baked into the recipe by the config assistant).
     func providerEnv(_ cfg: AgentConfig) -> [String: String] {
-        var e = AgentCatalog.spec(cfg.agentId).recipe?.env ?? [:]
-        for (k, v) in (provider(cfg.providerId)?.env ?? [:]) { e[k] = v }
-        return e
+        AgentCatalog.spec(cfg.agentId).recipe?.env ?? [:]
     }
-    func providerName(_ cfg: AgentConfig) -> String? { provider(cfg.providerId).map { $0.isDefault ? "默认" : $0.name } }
 
-    // Meta agent (judge + config assistant) — isolated identity/provider from lanes.
+    // Meta agent (judge + config assistant) — isolated identity from lanes; its env
+    // comes from its own recipe (same baked-in-creds model as lanes).
     var metaBin: String? { path(prefs.metaAgentId) }
     func metaEnv() -> [String: String] {
-        prefs.metaProviderId.isEmpty ? [:] : (ccProviders.first { $0.id == prefs.metaProviderId }?.env ?? [:])
+        AgentCatalog.spec(prefs.metaAgentId).recipe?.env ?? [:]
     }
 
     private func applyDefaults() {
@@ -173,7 +167,7 @@ final class AppState: ObservableObject {
     func newComparison() {
         runTask?.cancel()
         var fresh = Session()
-        fresh.configs = live.configs.map { AgentConfig(agentId: $0.agentId, model: $0.model, repo: $0.repo, providerId: $0.providerId) }
+        fresh.configs = live.configs.map { AgentConfig(agentId: $0.agentId, model: $0.model, repo: $0.repo) }
         fresh.runs = fresh.configs.map { _ in RunResult() }
         fresh.judgeOn = live.judgeOn; fresh.judgeAgentId = live.judgeAgentId; fresh.judgeModel = live.judgeModel
         fresh.task = ""
@@ -355,7 +349,7 @@ final class AppState: ObservableObject {
     func rerun(from h: Session) {
         var fresh = Session()
         fresh.task = h.task
-        fresh.configs = h.configs.map { AgentConfig(agentId: $0.agentId, model: $0.model, repo: $0.repo, providerId: $0.providerId) }
+        fresh.configs = h.configs.map { AgentConfig(agentId: $0.agentId, model: $0.model, repo: $0.repo) }
         fresh.runs = fresh.configs.map { _ in RunResult() }
         fresh.judgeOn = h.judgeOn; fresh.judgeAgentId = h.judgeAgentId; fresh.judgeModel = h.judgeModel
         live = fresh

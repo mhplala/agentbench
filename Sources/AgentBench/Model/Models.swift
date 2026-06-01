@@ -6,7 +6,6 @@ struct AgentConfig: Codable, Hashable {
     var agentId: String          // e.g. "claude-code"
     var model: String            // e.g. "claude-sonnet-4-6" (empty = agent default)
     var repo: String             // working directory / repo; empty = scratch workspace
-    var providerId: String? = nil  // cc-switch provider to inject (nil = ambient default)
 
     static let empty = AgentConfig(agentId: "claude-code", model: "", repo: "")
 }

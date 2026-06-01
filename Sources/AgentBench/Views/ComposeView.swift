@@ -178,23 +178,8 @@ struct AgentSlotView: View {
     let lane: Int
     @Binding var cfg: AgentConfig
 
-    @State private var testing = false
-    @State private var testResult: String? = nil
-    @State private var testPass = false
-
     private var spec: AgentSpec { AgentCatalog.spec(cfg.agentId) }
     private var installed: Bool { app.isInstalled(cfg.agentId) }
-
-    private func runTest() {
-        guard let p = app.provider(cfg.providerId) else {
-            testResult = "默认配置 · 无需测试"; testPass = true; return
-        }
-        testing = true; testResult = nil
-        Task {
-            let r = await CCSwitch.test(p)
-            testing = false; testResult = r.label; testPass = r.passed
-        }
-    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 13) {
@@ -221,8 +206,6 @@ struct AgentSlotView: View {
                         Button("\(a.name) · \(a.vendor)") {
                             cfg.agentId = a.id
                             cfg.model = ""        // reset to agent default; pick a real one from the menu
-                            cfg.providerId = nil  // providers are per-agent
-                            testResult = nil
                         }
                     }
                 }
@@ -230,45 +213,6 @@ struct AgentSlotView: View {
 
             field("模型（留空 = agent 自带默认）") {
                 ModelField(model: $cfg.model, suggestions: app.models(for: cfg.agentId))
-            }
-
-            // cc-switch providers for this agent (inject env per run; test connectivity)
-            let provs = app.providers(for: cfg.agentId)
-            if !provs.isEmpty {
-                field("Provider · cc-switch") {
-                    HStack(spacing: 8) {
-                        MenuField(label: cfg.providerId.flatMap { id in provs.first { $0.id == id }?.name }
-                                    ?? "默认（当前激活）") {
-                            Button("默认（当前激活）") { cfg.providerId = nil; testResult = nil }
-                            ForEach(provs) { p in
-                                Button(p.name + (p.isDefault ? "（默认）" : "") + (p.healthy == false ? " ⚠︎" : "")) {
-                                    cfg.providerId = p.id; testResult = nil
-                                }
-                            }
-                        }
-
-                        Button { runTest() } label: {
-                            HStack(spacing: 5) {
-                                if testing { Spinner(size: 11) } else { SFIcon(name: "bolt", size: 11) }
-                                Text("测试").font(Theme.ui(11.5, .semibold))
-                            }
-                            .foregroundStyle(Theme.ink2)
-                            .padding(.horizontal, 9).padding(.vertical, 6)
-                            .background(Theme.panel2)
-                            .overlay(RoundedRectangle(cornerRadius: Theme.rXs).stroke(Theme.line3, lineWidth: 1))
-                            .clipShape(RoundedRectangle(cornerRadius: Theme.rXs))
-                        }
-                        .buttonStyle(.plain).disabled(testing)
-                    }
-                    if let testResult {
-                        HStack(spacing: 5) {
-                            SFIcon(name: testPass ? "check" : "warn", size: 11)
-                            Text(testResult).font(Theme.mono(11))
-                        }
-                        .foregroundStyle(testPass ? Theme.good : Theme.bad)
-                        .padding(.top, 2)
-                    }
-                }
             }
 
             field("工作目录 / 仓库（留空 = 临时沙盒）") {
@@ -319,19 +263,11 @@ struct MetaAgentPicker: View {
                       width: 150) {
                 ForEach(AgentCatalog.all) { a in
                     Button(a.name + (app.isInstalled(a.id) ? "" : "（未装）")) {
-                        prefs.metaAgentId = a.id; prefs.metaModel = ""; prefs.metaProviderId = ""
+                        prefs.metaAgentId = a.id; prefs.metaModel = ""
                     }
                 }
             }
             ModelField(model: $prefs.metaModel, suggestions: app.models(for: prefs.metaAgentId)).frame(width: 150)
-            let provs = app.providers(for: prefs.metaAgentId)
-            if !provs.isEmpty {
-                MenuField(label: provs.first(where: { $0.id == prefs.metaProviderId })?.name ?? "默认",
-                          width: 130) {
-                    Button("默认") { prefs.metaProviderId = "" }
-                    ForEach(provs) { p in Button(p.name) { prefs.metaProviderId = p.id } }
-                }
-            }
         }
     }
 }

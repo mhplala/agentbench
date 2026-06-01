@@ -75,10 +75,9 @@ final class Prefs: ObservableObject {
     @Published var sandboxRuns: Bool { didSet { d.set(sandboxRuns, forKey: "sandboxRuns") } }
 
     // "Meta" agent used for judging + the config assistant — kept separate from the
-    // benchmarked lanes so its identity/credits/provider don't mix with contestants.
+    // benchmarked lanes so its identity/credits don't mix with contestants.
     @Published var metaAgentId: String { didSet { d.set(metaAgentId, forKey: "metaAgentId") } }
     @Published var metaModel: String { didSet { d.set(metaModel, forKey: "metaModel") } }
-    @Published var metaProviderId: String { didSet { d.set(metaProviderId, forKey: "metaProviderId") } }
     // extra env vars injected into every agent run (e.g. ARK_API_KEY / OPENAI_API_KEY
     // that a provider's config references via env_key but the GUI env lacks)
     @Published var customEnv: [String: String] { didSet { d.set(customEnv, forKey: "customEnv") } }
@@ -93,7 +92,6 @@ final class Prefs: ObservableObject {
         sandboxRuns = d.object(forKey: "sandboxRuns") as? Bool ?? true
         metaAgentId = d.string(forKey: "metaAgentId") ?? "claude-code"
         metaModel = d.string(forKey: "metaModel") ?? ""
-        metaProviderId = d.string(forKey: "metaProviderId") ?? ""
         customEnv = (d.dictionary(forKey: "customEnv") as? [String: String]) ?? [:]
     }
 }

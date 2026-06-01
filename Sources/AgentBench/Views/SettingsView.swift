@@ -100,7 +100,7 @@ struct SettingsView: View {
                 }
 
                 section("元 Agent · 裁判 & 配置助手") {
-                    Text("评判和配置助手使用的“元 agent”，与参赛 agent 独立——它用自己的身份/模型/provider，不和被对比的 agent 混用额度，也避免“拿参赛选手当裁判”。留空模型 = 用该 agent 默认；provider 选默认 = 用其登录态。")
+                    Text("评判和配置助手使用的“元 agent”，与参赛 agent 独立——它用自己的身份和模型，不和被对比的 agent 混用额度，也避免“拿参赛选手当裁判”。留空模型 = 用该 agent 默认。若要接第三方中转，用配置助手把它配成一个自带 env 的 agent 即可。")
                         .font(Theme.ui(12.5)).foregroundStyle(Theme.ink3)
                         .fixedSize(horizontal: false, vertical: true)
                     MetaAgentPicker()

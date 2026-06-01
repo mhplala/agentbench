@@ -15,16 +15,6 @@ struct ConvoColumn: View {
             // header
             HStack {
                 AgentTag(agentId: cfg.agentId, model: cfg.model, lane: lane)
-                if let pn = app.providerName(cfg), cfg.providerId != nil {
-                    HStack(spacing: 4) {
-                        SFIcon(name: "globe", size: 9)
-                        Text(pn).font(Theme.mono(10))
-                    }
-                    .foregroundStyle(Theme.ink3)
-                    .padding(.horizontal, 6).padding(.vertical, 2)
-                    .background(Theme.panel2)
-                    .overlay(Capsule().stroke(Theme.line2, lineWidth: 1)).clipShape(Capsule())
-                }
                 Spacer(minLength: 8)
                 statusView
             }
