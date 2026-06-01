@@ -105,6 +105,7 @@ enum ConfigAssistant {
         let agents = AgentConfigFile.parse(json)
         var out: [VerifyResult] = []
         for u in agents {
+            if Task.isCancelled { break }   // sheet dismissed / superseded — stop probing
             let spec = AgentConfigFile.spec(from: u)
             guard let bin = ProcessRunner.which(spec.bin) else {
                 out.append(VerifyResult(id: u.id, name: u.name, ok: false, detail: "未找到 CLI：\(spec.bin)（不在 PATH）")); continue
@@ -158,7 +159,7 @@ enum ConfigAssistant {
     private static func buildPrompt(request: String, currentJSON: String) -> String {
         let builtins = AgentCatalog.builtin.map { "\($0.id)(\($0.name), bin=\($0.bin))" }.joined(separator: ", ")
         return """
-        你是 AgentBench 的配置助手。AgentBench 通过 agents.json 让用户声明可调用的编码 agent CLI。不要使用任何工具，直接思考并输出 JSON。
+        你是 AgentBench 的配置助手。AgentBench 通过 agents.json 让用户声明可调用的编码 agent CLI。请边用工具实测边产出配置（见下方「工作方式」），最后只输出一个 JSON 对象。
 
         # agents.json 格式
         顶层 {"agents":[ ... ]}。每个 agent 字段：

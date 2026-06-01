@@ -39,7 +39,9 @@ enum Detector {
         switch spec.id {
         case "opencode":
             let collector = TextCollector()
-            _ = await ProcessRunner.run(executable: path, args: ["models"], cwd: nil) { l in
+            // Bounded: a CLI that blocks on auth/network/plugin init must not stall
+            // bootstrap. On timeout we keep whatever lines arrived (partial list).
+            await runBounded(12, executable: path, args: ["models"]) { l in
                 let t = l.text.trimmingCharacters(in: .whitespaces)
                 if !l.isErr && !t.isEmpty && !t.hasPrefix("█") && !t.hasPrefix("▀")
                     && (t.contains("/") || t.contains(":")) { collector.addLine(t) }
@@ -52,15 +54,26 @@ enum Detector {
 
     private static func probeVersion(_ path: String) async -> String? {
         let collector = TextCollector()
-        let code = await ProcessRunner.run(
-            executable: path, args: ["--version"], cwd: nil
-        ) { line in
+        await runBounded(6, executable: path, args: ["--version"]) { line in
             if !line.text.isEmpty { collector.add(line.text + " ") }
         }
-        _ = code
         let v = collector.value.trimmingCharacters(in: .whitespacesAndNewlines)
         if v.isEmpty { return nil }
         // keep it short
         return String(v.prefix(40))
+    }
+
+    // Run a probe with a wall-clock timeout. On timeout the child process is
+    // terminated (ProcessRunner honors Task cancellation), so a hung CLI can't
+    // keep bootstrap stuck in the "detecting" state.
+    private static func runBounded(_ seconds: Double, executable: String, args: [String],
+                                   onLine: @escaping @Sendable (ProcessRunner.Line) -> Void) async {
+        let runTask = Task { await ProcessRunner.run(executable: executable, args: args, cwd: nil, onLine: onLine) }
+        let timeout = Task {
+            try? await Task.sleep(nanoseconds: UInt64(seconds * 1_000_000_000))
+            runTask.cancel()
+        }
+        _ = await runTask.value
+        timeout.cancel()
     }
 }

@@ -36,19 +36,33 @@ enum ProcessRunner {
         p.arguments = ["-lic", "env"]
         p.environment = ProcessInfo.processInfo.environment
         let out = Pipe(); p.standardOutput = out; p.standardError = Pipe()
-        do {
-            try p.run()
-            let data = out.fileHandleForReading.readDataToEndOfFile()
-            p.waitUntilExit()
-            var map: [String: String] = [:]
-            for line in (String(data: data, encoding: .utf8) ?? "").split(separator: "\n") {
-                guard let eq = line.firstIndex(of: "=") else { continue }
-                let k = String(line[line.startIndex..<eq])
-                let v = String(line[line.index(after: eq)...])
-                if !k.isEmpty { map[k] = v }
+        do { try p.run() } catch { return [:] }
+
+        // Read on a background queue, bounded by a deadline — a slow or interactive
+        // login shell (e.g. one that prompts, or sources a hanging plugin) must not
+        // block the first ProcessRunner use forever. We only read the buffer after
+        // the semaphore confirms the read finished, so there's no data race.
+        let sem = DispatchSemaphore(value: 0)
+        let box = DataBox()
+        DispatchQueue.global().async {
+            box.data = out.fileHandleForReading.readDataToEndOfFile()
+            sem.signal()
+        }
+        if sem.wait(timeout: .now() + 4) == .timedOut {
+            p.terminate()                                    // SIGTERM → closes the pipe → read returns
+            if sem.wait(timeout: .now() + 1) == .timedOut {
+                kill(p.processIdentifier, SIGKILL)
+                if sem.wait(timeout: .now() + 1) == .timedOut { return [:] }  // truly stuck: best-effort
             }
-            return map
-        } catch { return [:] }
+        }
+        var map: [String: String] = [:]
+        for line in (String(data: box.data, encoding: .utf8) ?? "").split(separator: "\n") {
+            guard let eq = line.firstIndex(of: "=") else { continue }
+            let k = String(line[line.startIndex..<eq])
+            let v = String(line[line.index(after: eq)...])
+            if !k.isEmpty { map[k] = v }
+        }
+        return map
     }
 
     static func baseEnv() -> [String: String] {
@@ -181,6 +195,10 @@ enum ProcessRunner {
         }
     }
 }
+
+// Holds Data written by a background read and handed off via a semaphore (the
+// signal/wait establishes the happens-before so the read side sees the full value).
+final class DataBox: @unchecked Sendable { var data = Data() }
 
 // Thread-safe text accumulator for collecting output from @Sendable callbacks.
 final class TextCollector: @unchecked Sendable {

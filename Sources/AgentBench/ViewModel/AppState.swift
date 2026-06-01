@@ -23,6 +23,9 @@ final class AppState: ObservableObject {
 
     let prefs = Prefs.shared
     private var runTask: Task<Void, Never>? = nil
+    // Manual judge re-run lives in its own handle so a new comparison / cancel can
+    // stop it — otherwise a stale retry keeps judging (and burning tokens) in the bg.
+    private var judgeTask: Task<Void, Never>? = nil
 
     init() {
         AgentConfigFile.writeTemplateIfMissing()
@@ -197,6 +200,7 @@ final class AppState: ObservableObject {
     func runComparison() {
         guard canRun() else { return }
         runTask?.cancel()
+        judgeTask?.cancel()   // a new run supersedes any in-flight manual judge retry
 
         var s = live
         s.runs = s.configs.map { _ in var r = RunResult(); r.status = .running; return r }
@@ -327,15 +331,17 @@ final class AppState: ObservableObject {
               let bin = metaBin, !judging else { return }
         let sid = live.id
         judging = true; live.judgeError = nil
-        Task {
+        judgeTask?.cancel()
+        judgeTask = Task {
             var outcome = Judge.Outcome(verdict: nil, error: nil)
             for _ in 0..<3 {
+                if Task.isCancelled { return }
                 outcome = await Judge.run(task: self.live.task, runs: self.live.runs,
                                           judgeAgentId: self.prefs.metaAgentId, judgeModel: self.prefs.metaModel,
                                           judgeBin: bin, env: self.metaEnv())
                 if outcome.verdict != nil || self.live.id != sid { break }
             }
-            guard self.live.id == sid else { return }
+            guard !Task.isCancelled, self.live.id == sid else { return }
             self.judging = false
             self.live.verdict = outcome.verdict
             self.live.judgeError = outcome.verdict == nil ? (outcome.error ?? "裁判未产出结果") : nil
@@ -345,6 +351,7 @@ final class AppState: ObservableObject {
 
     func cancelRun() {
         runTask?.cancel()
+        judgeTask?.cancel()
         for i in live.runs.indices where live.runs[i].status == .running {
             live.runs[i].status = .failed; live.runs[i].error = "已取消"
         }

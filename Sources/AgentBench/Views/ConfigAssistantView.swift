@@ -9,24 +9,43 @@ final class ConfigAssistantModel: ObservableObject {
     @Published var verifying = false
     @Published var verifyResults: [ConfigAssistant.VerifyResult] = []
 
+    // Tracked so they can be cancelled when the sheet is dismissed — otherwise the
+    // agent/verify subprocesses keep running and mutate this model after teardown.
+    private var runTask: Task<Void, Never>?
+    private var verifyTask: Task<Void, Never>?
+
     func run(request: String, agentId: String, bin: String, sandbox: Bool,
              model: String, env: [String: String]) {
+        runTask?.cancel()
         running = true; proposal = nil; applied = false; turns = []; verifyResults = []
         let current = (try? String(contentsOf: AgentConfigFile.url, encoding: .utf8)) ?? AgentConfigFile.template
-        Task {
+        runTask = Task {
             let p = await ConfigAssistant.run(request: request, currentJSON: current,
                                               agentId: agentId, bin: bin, sandbox: sandbox,
                                               model: model, env: env) { ts in
                 Task { @MainActor in self.turns = ts }
             }
+            if Task.isCancelled { return }
             self.running = false
             self.proposal = p
         }
     }
 
     func verify(_ json: String, env: [String: String]) {
+        verifyTask?.cancel()
         verifying = true; verifyResults = []
-        Task { let r = await ConfigAssistant.verify(json, env: env); self.verifying = false; self.verifyResults = r }
+        verifyTask = Task {
+            let r = await ConfigAssistant.verify(json, env: env)
+            if Task.isCancelled { return }
+            self.verifying = false; self.verifyResults = r
+        }
+    }
+
+    // Called from the view's onDisappear so nothing keeps running past the sheet.
+    func cancel() {
+        runTask?.cancel(); runTask = nil
+        verifyTask?.cancel(); verifyTask = nil
+        running = false; verifying = false
     }
 }
 
@@ -139,6 +158,7 @@ struct ConfigAssistantView: View {
         }
         .frame(width: 680, height: 640)
         .background(Theme.bg)
+        .onDisappear { m.cancel() }   // don't let the agent/verify run outlive the sheet
     }
 
     private var canRun: Bool { agent != nil && !m.running && !request.trimmingCharacters(in: .whitespaces).isEmpty }
