@@ -151,6 +151,11 @@ struct ArchiveAnswerCard: View {
 
     @State private var tab = "preview"
     @State private var localTrust = false
+    // WKWebView is expensive to instantiate; with 3-4 lanes, mounting one per
+    // answer synchronously on selection freezes the switch between history items.
+    // Gate it behind a .task so the row commits first and the web view mounts a
+    // runloop later (and only for cards actually built by the LazyVStack).
+    @State private var mountPreview = false
 
     private var trusted: Bool { app.prefs.trustLocalPreviews || localTrust }
     // The artifact's HTML file may have been purged from the temp runs dir; only
@@ -211,6 +216,16 @@ struct ArchiveAnswerCard: View {
             Group {
                 if tab == "preview" {
                     if let html = turn.previewHTML {
+                        if !mountPreview {
+                            // lightweight stand-in; the web view mounts on the next
+                            // runloop so selecting this history item stays snappy
+                            VStack(spacing: 6) {
+                                Spinner(size: 16)
+                                Text("准备预览…").font(Theme.ui(11.5)).foregroundStyle(Theme.ink3)
+                            }
+                            .frame(maxWidth: .infinity).frame(height: 300).background(Theme.panel2)
+                            .task { mountPreview = true }
+                        } else {
                         ZStack(alignment: .bottom) {
                             HTMLPreview(html: html,
                                         baseDir: fileStillOnDisk ? run.previewBaseDir : nil,
@@ -234,6 +249,7 @@ struct ArchiveAnswerCard: View {
                             }
                         }
                         .frame(height: 300)
+                        }
                     } else {
                         VStack(spacing: 6) {
                             SFIcon(name: "info", size: 18).foregroundStyle(Theme.ink3)

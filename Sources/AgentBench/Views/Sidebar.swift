@@ -134,15 +134,20 @@ struct Sidebar: View {
 }
 
 private extension View {
-    // Custom sidebar selection: a calm neutral pill + tap-to-select, replacing the
-    // native system-blue highlight. Inset slightly to read as a floating pill.
+    // Custom sidebar selection: a calm neutral pill, replacing the native
+    // system-blue highlight. A plain Button (not .onTapGesture) is used because
+    // tap gestures inside a List are disambiguated against scrolling and feel
+    // laggy / "不跟手"; a Button registers the click immediately.
     func rowSelect(_ selected: Bool, _ action: @escaping () -> Void) -> some View {
-        listRowBackground(
+        Button(action: action) {
+            self.frame(maxWidth: .infinity, alignment: .leading)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .listRowBackground(
             RoundedRectangle(cornerRadius: 7)
                 .fill(selected ? Theme.selection : Color.clear)
                 .padding(.horizontal, 6).padding(.vertical, 1)
         )
-        .contentShape(Rectangle())
-        .onTapGesture(perform: action)
     }
 }
