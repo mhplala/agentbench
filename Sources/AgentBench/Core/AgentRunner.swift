@@ -241,7 +241,7 @@ enum AgentRunner {
         // flag follow the sandbox setting deterministically, not autoApprove:
         //   sandbox on  → --full-auto                                (workspace-write sandbox)
         //   sandbox off → --dangerously-bypass-approvals-and-sandbox (no sandbox)
-        if agentId == "codex" {
+        if agentId == "codex" || AgentCatalog.spec(agentId).recipe?.parser == "codex" {
             let want = sandbox ? "--full-auto" : "--dangerously-bypass-approvals-and-sandbox"
             let drop = sandbox ? "--dangerously-bypass-approvals-and-sandbox" : "--full-auto"
             var a = args.filter { $0 != drop }
