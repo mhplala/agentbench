@@ -7,7 +7,6 @@ struct WorkspaceView: View {
     var body: some View {
         ZStack {
             VStack(spacing: 0) {
-                WorkBar()
                 Convo()
                 if !running {
                     FollowupComposer()
@@ -18,66 +17,40 @@ struct WorkspaceView: View {
             if app.compareOpen { CompareOverlay().transition(.opacity) }
         }
         .animation(.easeInOut(duration: 0.2), value: app.compareOpen)
+        .navigationTitle(app.live.task.isEmpty ? "对比" : app.live.task)
+        .toolbar { workspaceToolbar }
     }
-}
 
-struct WorkBar: View {
-    @EnvironmentObject var app: AppState
-    private var running: Bool { app.livePhase == .running }
-
-    var body: some View {
-        HStack(spacing: 16) {
-            Text(app.live.task).font(Theme.ui(15, .semibold)).tracking(-0.1)
-                .foregroundStyle(Theme.ink).lineLimit(1).truncationMode(.tail)
-                .frame(maxWidth: .infinity, alignment: .leading)
-            HStack(spacing: 12) {
-                ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(spacing: 9) {
-                        ForEach(app.live.configs.indices, id: \.self) { i in
-                            if i > 0 { Text("vs").font(Theme.mono(10)).foregroundStyle(Theme.ink3) }
-                            AgentTag(agentId: app.live.configs[i].agentId, model: app.live.configs[i].model, lane: i)
-                        }
-                    }
-                }
-                .frame(maxWidth: app.live.laneCount > 2 ? 720 : 520)
-                if !running && app.live.judgeOn {
-                    Button { app.judgeOpen.toggle() } label: {
-                        HStack(spacing: 7) {
-                            SFIcon(name: "gavel", size: 15)
-                            Text("裁判打分").font(Theme.ui(13, .semibold))
-                        }
-                        .foregroundStyle(.white)
-                        .padding(.horizontal, 13).padding(.vertical, 7)
-                        .background(app.accentColor)
-                        .clipShape(RoundedRectangle(cornerRadius: Theme.rSm))
-                    }
-                    .buttonStyle(.plain).help("查看自动裁判打分")
-                }
-                if app.livePhase == .done {
-                    Button { Exporter.exportWithPanel(app.live) } label: { wbLabel("send", "导出", on: false) }
-                        .buttonStyle(.plain).help("导出 trace / 日志 / 指标 / 裁判到文件夹")
-                }
-                if running {
-                    Button { app.cancelRun() } label: { wbLabel("x", "停止", on: false) }.buttonStyle(.plain)
-                } else {
-                    Button { app.runComparison() } label: { wbLabel("refresh", "重跑", on: false) }
-                        .buttonStyle(.plain).disabled(!app.canRun())
+    // Native toolbar (matches Compose/Archive) — replaces the old in-content WorkBar,
+    // which doubled up with the system titlebar into a second strip.
+    @ToolbarContentBuilder
+    private var workspaceToolbar: some ToolbarContent {
+        ToolbarItem(placement: .principal) {
+            HStack(spacing: 9) {
+                ForEach(app.live.configs.indices, id: \.self) { i in
+                    if i > 0 { Text("vs").font(Theme.mono(10)).foregroundStyle(Theme.ink3) }
+                    AgentTag(agentId: app.live.configs[i].agentId, model: app.live.configs[i].model, lane: i)
                 }
             }
+            .padding(.horizontal, 14).padding(.vertical, 5)
+            .frame(maxWidth: app.live.laneCount > 2 ? 680 : 460)
         }
-        .padding(.horizontal, 22).frame(height: 58)
-        .padding(.top, 28)   // clear the titlebar / traffic-light strip
-        .background(Theme.panel.opacity(0.95))
-        .overlay(Rectangle().frame(height: 1).foregroundStyle(Theme.line), alignment: .bottom)
-    }
-
-    private func wbLabel(_ icon: String, _ text: String, on: Bool) -> some View {
-        HStack(spacing: 7) { SFIcon(name: icon, size: 15); Text(text).font(Theme.ui(13, .semibold)) }
-            .foregroundStyle(on ? .white : Theme.ink)
-            .padding(.horizontal, 12).padding(.vertical, 7)
-            .background(on ? app.accentColor : Theme.panel)
-            .overlay(RoundedRectangle(cornerRadius: Theme.rSm).stroke(on ? app.accentColor : Theme.line3, lineWidth: 1))
-            .clipShape(RoundedRectangle(cornerRadius: Theme.rSm))
+        ToolbarItemGroup(placement: .primaryAction) {
+            if !running && app.live.judgeOn {
+                Button { app.judgeOpen.toggle() } label: { Image(systemName: "hammer.fill") }
+                    .help("自动裁判打分")
+            }
+            if app.livePhase == .done {
+                Button { Exporter.exportWithPanel(app.live) } label: { Image(systemName: "square.and.arrow.up") }
+                    .help("导出 trace / 日志 / 指标 / 裁判到文件夹")
+            }
+            if running {
+                Button { app.cancelRun() } label: { Image(systemName: "stop.fill") }.help("停止运行")
+            } else {
+                Button { app.runComparison() } label: { Image(systemName: "arrow.clockwise") }
+                    .help("重跑").disabled(!app.canRun())
+            }
+        }
     }
 }
 
