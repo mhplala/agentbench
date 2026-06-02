@@ -44,6 +44,7 @@ enum AgentRunner {
         var args = adapter.command(task: task, model: config.model,
                                    workdir: prepared.dir, autoApprove: autoApprove)
         args = bareIfCustomToken(args, agentId: config.agentId, env: env)
+        args = codexProviderArgs(args, agentId: config.agentId, env: env)
         let (exe, finalArgs) = sandboxWrap(binPath, args, workdir: prepared.dir,
                                            agentId: config.agentId, sandbox: sandbox)
 
@@ -162,6 +163,7 @@ enum AgentRunner {
         var args = adapter.resumeArgs(message: message, model: config.model,
                                       workdir: workdir, sessionId: prior.sessionId, autoApprove: autoApprove)
         args = bareIfCustomToken(args, agentId: config.agentId, env: env)
+        args = codexProviderArgs(args, agentId: config.agentId, env: env)
         let (exe, finalArgs) = sandboxWrap(binPath, args, workdir: workdir,
                                            agentId: config.agentId, sandbox: sandbox)
         let baseTurns = prior.turns
@@ -256,6 +258,41 @@ enum AgentRunner {
     // injected provider token is ignored (it sends the OAuth token → 401 on relays
     // like ark/doubao). `--bare` forces strict env-key auth so the provider token
     // is actually used. Only applied when a custom token is injected.
+    // codex reads its provider/endpoint from ~/.codex/config.toml, NOT from arbitrary
+    // env vars — so an injected OPENAI_BASE_URL alone is ignored and codex hits the
+    // default endpoint (why "configure codex via agents.json env" failed while
+    // cc-switch, which writes config.toml, worked). Translate the relay env into
+    // inline `-c` overrides so a base_url + key fully drive codex with no config file.
+    // wire_api=chat (not responses) — third-party relays usually reject codex's
+    // Responses-API tool definitions.
+    static func codexProviderArgs(_ args: [String], agentId: String, env: [String: String]) -> [String] {
+        let isCodex = agentId == "codex" || AgentCatalog.spec(agentId).recipe?.parser == "codex"
+        guard isCodex else { return args }
+        // a custom template already wiring a provider → don't double-configure
+        if args.contains(where: { $0.contains("model_provider") }) { return args }
+        // base_url / key may arrive via the per-run recipe env OR global customEnv —
+        // both get injected into the process, so consult the merged view (run wins).
+        let custom = (UserDefaults.standard.dictionary(forKey: "customEnv") as? [String: String]) ?? [:]
+        let merged = custom.merging(env) { _, run in run }
+        guard let base = (merged["OPENAI_BASE_URL"] ?? merged["CODEX_BASE_URL"]), !base.isEmpty else { return args }
+        let keyName = merged["OPENAI_API_KEY"] != nil ? "OPENAI_API_KEY"
+            : (merged.keys.first { $0.uppercased().hasSuffix("_API_KEY") }
+               ?? merged.keys.first { $0.uppercased().hasSuffix("KEY") }
+               ?? "OPENAI_API_KEY")
+        // wire_api defaults to "chat" (best compatibility with third-party relays that
+        // reject codex's Responses tool defs), but some providers (e.g. xiaomi mimo)
+        // require "responses" — override via CODEX_WIRE_API.
+        let wire = merged["CODEX_WIRE_API"].map { $0.lowercased() == "responses" ? "responses" : "chat" } ?? "chat"
+        let p = "agentbench"
+        return args + [
+            "-c", "model_provider=\"\(p)\"",
+            "-c", "model_providers.\(p).name=\"AgentBench Relay\"",
+            "-c", "model_providers.\(p).base_url=\"\(base)\"",
+            "-c", "model_providers.\(p).wire_api=\"\(wire)\"",
+            "-c", "model_providers.\(p).env_key=\"\(keyName)\"",
+        ]
+    }
+
     static func bareIfCustomToken(_ args: [String], agentId: String, env: [String: String]) -> [String] {
         // claude-family = built-in claude OR a custom agent using the "claude" parser
         let isClaude = agentId == "claude-code" || AgentCatalog.spec(agentId).recipe?.parser == "claude"

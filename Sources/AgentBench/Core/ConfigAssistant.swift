@@ -193,6 +193,7 @@ enum ConfigAssistant {
         - 注入 `ANTHROPIC_BASE_URL` + `ANTHROPIC_AUTH_TOKEN`（放进顶层 env 或让用户已配在运行环境变量里）。
         - **args 里必须带 `--bare`**！否则 claude 会优先用本机 OAuth 登录态、忽略注入的 token，去打中转 → 鉴权失败。例：`["-p","{task}","--output-format","stream-json","--verbose","--dangerously-skip-permissions","--bare"]`。
         - 注意：claude 只能连 **Anthropic 兼容**端点。若中转只有 OpenAI 接口（如火山 ark 的 /api/v3 只支持 chat/completions），claude 仍连不上（无 /v1/messages）。这种情况建议改用 opencode（其 doubao provider 已 OpenAI 兼容）。
+        - **模型名映射（极易踩坑）**：claude 默认按别名请求（sonnet/opus/haiku → 它内置的 claude-sonnet-4-x 等），但中转通常只认它自己的模型名（如小米 mimo 的 base_url=.../anthropic 只认 `mimo-v2.5-pro`）→ 别名打过去 400/404。两种解法，**至少做一种**：① 把该 agent 的 `models` 设成中转模型名（如 `["mimo-v2.5-pro"]`），运行时会 `--model mimo-v2.5-pro` 传过去；② 在 env 里加 `ANTHROPIC_DEFAULT_SONNET_MODEL`/`OPUS`/`HAIKU`（及对应 `_NAME`）= 该模型名，把所有别名映射过去——cc-switch 正是这么做的（可从其 DB `app_type='claude'` 的 provider 的 env 里直接读到这些键值）。
 
         # codex 接第三方中转（重要经验）
         给 codex 配自定义 OpenAI 兼容 provider（火山 ark / doubao / 各家中转）时：
