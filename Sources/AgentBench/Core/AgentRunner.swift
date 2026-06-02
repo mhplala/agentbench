@@ -53,7 +53,8 @@ enum AgentRunner {
 
         // 2. stream
         let exit = await ProcessRunner.run(
-            executable: exe, args: finalArgs, cwd: prepared.dir, extraEnv: env
+            executable: exe, args: finalArgs, cwd: prepared.dir, extraEnv: env,
+            dropEnvKeys: anthropicCleanKeys(agentId: config.agentId, env: env)
         ) { line in
             box.lock.lock()
             adapter.parse(line, into: &box.acc)
@@ -171,7 +172,8 @@ enum AgentRunner {
         let box = Box()
         let started = Date()
 
-        _ = await ProcessRunner.run(executable: exe, args: finalArgs, cwd: workdir, extraEnv: env) { line in
+        _ = await ProcessRunner.run(executable: exe, args: finalArgs, cwd: workdir, extraEnv: env,
+                                    dropEnvKeys: anthropicCleanKeys(agentId: config.agentId, env: env)) { line in
             box.lock.lock()
             adapter.parse(line, into: &box.acc)
             let now = Date()
@@ -299,6 +301,21 @@ enum AgentRunner {
             "-c", "model_providers.\(p).wire_api=\"\(wire)\"",
             "-c", "model_providers.\(p).env_key=\"\(keyName)\"",
         ]
+    }
+
+    // The built-in claude-code is meant to be the user's CLEAN real-Anthropic login.
+    // cc-switch (and relay setups) export ANTHROPIC_* globally in the login shell,
+    // which baseEnv() inherits — silently redirecting built-in claude or remapping its
+    // sonnet/opus/haiku aliases to a relay-only model (e.g. mimo) → 404. Strip those for
+    // built-in claude only; a relay agent injects ANTHROPIC_BASE_URL itself (intentional).
+    static let anthropicRelayKeys = [
+        "ANTHROPIC_BASE_URL", "ANTHROPIC_AUTH_TOKEN", "ANTHROPIC_API_KEY", "ANTHROPIC_MODEL",
+        "ANTHROPIC_DEFAULT_SONNET_MODEL", "ANTHROPIC_DEFAULT_OPUS_MODEL", "ANTHROPIC_DEFAULT_HAIKU_MODEL",
+        "ANTHROPIC_DEFAULT_SONNET_MODEL_NAME", "ANTHROPIC_DEFAULT_OPUS_MODEL_NAME", "ANTHROPIC_DEFAULT_HAIKU_MODEL_NAME",
+    ]
+    static func anthropicCleanKeys(agentId: String, env: [String: String]) -> [String] {
+        guard agentId == "claude-code", env["ANTHROPIC_BASE_URL"] == nil else { return [] }
+        return anthropicRelayKeys
     }
 
     static func bareIfCustomToken(_ args: [String], agentId: String, env: [String: String]) -> [String] {

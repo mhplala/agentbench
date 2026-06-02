@@ -132,6 +132,7 @@ enum ProcessRunner {
         args: [String],
         cwd: String?,
         extraEnv: [String: String] = [:],
+        dropEnvKeys: [String] = [],
         stdin: String? = nil,
         onLine: @escaping @Sendable (Line) -> Void
     ) async -> Int32 {
@@ -141,6 +142,10 @@ enum ProcessRunner {
         if let cwd, !cwd.isEmpty { proc.currentDirectoryURL = URL(fileURLWithPath: cwd) }
         var env = baseEnv()
         for (k, v) in extraEnv { env[k] = v }
+        // Remove inherited keys the caller wants gone (e.g. a built-in claude run must
+        // not inherit ANTHROPIC_DEFAULT_*_MODEL / BASE_URL exported globally by cc-switch,
+        // which would silently redirect it or remap aliases to a relay-only model).
+        for k in dropEnvKeys where extraEnv[k] == nil { env.removeValue(forKey: k) }
         proc.environment = env
 
         let outPipe = Pipe(), errPipe = Pipe(), inPipe = Pipe()

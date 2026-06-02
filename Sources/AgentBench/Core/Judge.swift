@@ -40,7 +40,8 @@ enum Judge {
             var args = ["-p", prompt, "--output-format", "json", "--json-schema", schema, "--tools", ""]
             if !model.isEmpty { args += ["--model", model] }
             if env["ANTHROPIC_AUTH_TOKEN"] != nil || env["ANTHROPIC_API_KEY"] != nil { args += ["--bare"] }
-            let captured = await capture(bin: judgeBin, args: args, cwd: nil, env: env)
+            let drop = AgentRunner.anthropicCleanKeys(agentId: judgeAgentId, env: env)
+            let captured = await capture(bin: judgeBin, args: args, cwd: nil, env: env, drop: drop)
             raw = captured.out
             guard captured.code == 0 else {
                 return Outcome(verdict: nil, error: "裁判调用失败（退出码 \(captured.code)）\n" + String(raw.suffix(300)))
@@ -184,9 +185,9 @@ enum Judge {
 
     // MARK: JSON extraction helpers
 
-    private static func capture(bin: String, args: [String], cwd: String?, env: [String: String] = [:]) async -> (out: String, code: Int32) {
+    private static func capture(bin: String, args: [String], cwd: String?, env: [String: String] = [:], drop: [String] = []) async -> (out: String, code: Int32) {
         let collector = TextCollector()
-        let code = await ProcessRunner.run(executable: bin, args: args, cwd: cwd, extraEnv: env) { line in
+        let code = await ProcessRunner.run(executable: bin, args: args, cwd: cwd, extraEnv: env, dropEnvKeys: drop) { line in
             if !line.isErr { collector.addLine(line.text) }
         }
         return (collector.value, code)
