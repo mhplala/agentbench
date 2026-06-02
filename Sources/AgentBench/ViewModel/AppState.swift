@@ -42,6 +42,7 @@ final class AppState: ObservableObject {
         allSessions = loaded
         live = restored
         PreviewServer.shared.start(root: Workspace.runsRoot)
+        CodexRelayProxy.shared.start()   // Responses→chat shim for codex + chat-only relays
     }
 
     // MARK: trust / browser (per lane)

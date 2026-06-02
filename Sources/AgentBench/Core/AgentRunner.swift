@@ -279,15 +279,23 @@ enum AgentRunner {
             : (merged.keys.first { $0.uppercased().hasSuffix("_API_KEY") }
                ?? merged.keys.first { $0.uppercased().hasSuffix("KEY") }
                ?? "OPENAI_API_KEY")
-        // wire_api defaults to "chat" (best compatibility with third-party relays that
-        // reject codex's Responses tool defs), but some providers (e.g. xiaomi mimo)
-        // require "responses" — override via CODEX_WIRE_API.
-        let wire = merged["CODEX_WIRE_API"].map { $0.lowercased() == "responses" ? "responses" : "chat" } ?? "chat"
+        // Modern codex only speaks the Responses API, but most relays are
+        // chat/completions-only. Route through the in-app Responses→chat proxy when
+        // it's up: codex talks Responses to the loopback proxy, which translates to
+        // the upstream chat endpoint (key flows through codex's Bearer header).
+        // Fall back to a direct provider if the proxy isn't ready.
+        let useBase: String, wire: String
+        if let proxied = CodexRelayProxy.shared.baseURL(forUpstream: base) {
+            useBase = proxied; wire = "responses"
+        } else {
+            useBase = base
+            wire = merged["CODEX_WIRE_API"].map { $0.lowercased() == "responses" ? "responses" : "chat" } ?? "chat"
+        }
         let p = "agentbench"
         return args + [
             "-c", "model_provider=\"\(p)\"",
             "-c", "model_providers.\(p).name=\"AgentBench Relay\"",
-            "-c", "model_providers.\(p).base_url=\"\(base)\"",
+            "-c", "model_providers.\(p).base_url=\"\(useBase)\"",
             "-c", "model_providers.\(p).wire_api=\"\(wire)\"",
             "-c", "model_providers.\(p).env_key=\"\(keyName)\"",
         ]
