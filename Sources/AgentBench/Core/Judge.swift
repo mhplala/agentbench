@@ -27,13 +27,18 @@ enum Judge {
                     env: [String: String] = [:]) async -> Outcome {
         let prompt = buildPrompt(task: task, runs: runs)
         let spec = AgentCatalog.spec(judgeAgentId)
-        let label = spec.name + (judgeModel.isEmpty ? "" : " · \(judgeModel)")
+        // Fall back to the agent's own configured model when no judge model is set: a
+        // relay agent (e.g. claude-doubao) needs its access-point id. Without a --model,
+        // claude uses the globally-configured default model (e.g. mimo from cc-switch),
+        // which doesn't exist on the relay endpoint → 404 → judge fails.
+        let model = (judgeModel.isEmpty && spec.recipe != nil) ? (spec.models.first ?? "") : judgeModel
+        let label = spec.name + (model.isEmpty ? "" : " · \(model)")
 
         let verdictObj: [String: Any]?
         var raw = ""
         if judgeAgentId == "claude-code" || spec.recipe?.parser == "claude" {
             var args = ["-p", prompt, "--output-format", "json", "--json-schema", schema, "--tools", ""]
-            if !judgeModel.isEmpty { args += ["--model", judgeModel] }
+            if !model.isEmpty { args += ["--model", model] }
             if env["ANTHROPIC_AUTH_TOKEN"] != nil || env["ANTHROPIC_API_KEY"] != nil { args += ["--bare"] }
             let captured = await capture(bin: judgeBin, args: args, cwd: nil, env: env)
             raw = captured.out
@@ -43,7 +48,7 @@ enum Judge {
             verdictObj = parseClaude(captured.out)
         } else {
             raw = await captureAgentText(agentId: judgeAgentId, prompt: prompt,
-                                         model: judgeModel, bin: judgeBin, env: env)
+                                         model: model, bin: judgeBin, env: env)
             verdictObj = extractVerdict(raw)
         }
         guard let v = verdictObj else {
