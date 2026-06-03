@@ -128,6 +128,17 @@ final class CodexRelayProxy: @unchecked Sendable {
 
     // MARK: translate request (Responses → chat/completions)
 
+    // Responses roles include `developer` (and `system`); chat/completions providers
+    // only accept system/user/assistant/tool, so normalize developer → system.
+    static func chatRole(_ r: String?) -> String {
+        switch r {
+        case "system", "developer": return "system"
+        case "assistant": return "assistant"
+        case "tool": return "tool"
+        default: return "user"
+        }
+    }
+
     static func responsesToChat(_ r: [String: Any]) -> [String: Any] {
         var messages: [[String: Any]] = []
         if let instr = r["instructions"] as? String, !instr.isEmpty {
@@ -144,8 +155,7 @@ final class CodexRelayProxy: @unchecked Sendable {
             for it in items {
                 switch it["type"] as? String {
                 case "message", .none:
-                    let role = (it["role"] as? String) ?? "user"
-                    messages.append(["role": role, "content": textOf(it["content"])])
+                    messages.append(["role": chatRole(it["role"] as? String), "content": textOf(it["content"])])
                 case "function_call":
                     let call: [String: Any] = ["id": it["call_id"] ?? it["id"] ?? "", "type": "function",
                         "function": ["name": it["name"] ?? "", "arguments": it["arguments"] ?? "{}"]]
