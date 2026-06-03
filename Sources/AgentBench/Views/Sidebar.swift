@@ -62,6 +62,8 @@ struct Sidebar: View {
             .buttonStyle(.plain)
         }
         .padding(.horizontal, 12).padding(.top, 4).padding(.bottom, 8)
+        .frame(maxWidth: .infinity)
+        .background(.bar)   // opaque so rows don't show through the top inset either
     }
 
     // MARK: settings (bottom)
@@ -81,6 +83,9 @@ struct Sidebar: View {
             .buttonStyle(.plain)
             .padding(.horizontal, 8).padding(.vertical, 6)
         }
+        // opaque bar so list rows scrolling past don't show through / overlap "设置"
+        .frame(maxWidth: .infinity)
+        .background(.bar)
     }
 
     // MARK: rows
