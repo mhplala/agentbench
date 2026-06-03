@@ -212,8 +212,12 @@ struct ClaudeCodeAdapter: AgentAdapter {
 struct CodexAdapter: AgentAdapter {
     let spec = AgentCatalog.spec("codex")
 
+    // ask reasoning models to surface a reasoning summary (no-op on models that don't
+    // support it) so codex's thinking shows up in the 推理 stream
+    private let reasoningArgs = ["-c", "model_reasoning_summary=\"auto\""]
+
     func command(task: String, model: String, workdir: String, autoApprove: Bool) -> [String] {
-        var a = ["exec", task, "--json", "-C", workdir, "--skip-git-repo-check"]
+        var a = ["exec", task, "--json", "-C", workdir, "--skip-git-repo-check"] + reasoningArgs
         if !model.isEmpty { a += ["-m", model] }
         a += autoApprove ? ["--dangerously-bypass-approvals-and-sandbox"] : ["--full-auto"]
         return a
@@ -222,7 +226,7 @@ struct CodexAdapter: AgentAdapter {
     func resumeArgs(message: String, model: String, workdir: String, sessionId: String?, autoApprove: Bool) -> [String] {
         var a = ["exec", "resume"]
         if let sid = sessionId { a += [sid] } else { a += ["--last"] }
-        a += [message, "--json", "--skip-git-repo-check", "-C", workdir]
+        a += [message, "--json", "--skip-git-repo-check", "-C", workdir] + reasoningArgs
         if !model.isEmpty { a += ["-m", model] }
         a += autoApprove ? ["--dangerously-bypass-approvals-and-sandbox"] : ["--full-auto"]
         return a
