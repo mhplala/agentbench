@@ -6,8 +6,8 @@ options:
   createIntermediateGroups: true
 settings:
   base:
-    MARKETING_VERSION: "1.0.5"
-    CURRENT_PROJECT_VERSION: "6"
+    MARKETING_VERSION: "1.0.6"
+    CURRENT_PROJECT_VERSION: "7"
     SWIFT_VERSION: "5.0"
     DEVELOPMENT_LANGUAGE: zh-Hans
 targets:
@@ -21,8 +21,8 @@ targets:
       properties:
         CFBundleName: AgentBench
         CFBundleDisplayName: AgentBench
-        CFBundleShortVersionString: "1.0.5"
-        CFBundleVersion: "6"
+        CFBundleShortVersionString: "1.0.6"
+        CFBundleVersion: "7"
         LSMinimumSystemVersion: "14.0"
         NSHighResolutionCapable: true
         NSHumanReadableCopyright: "AgentBench · 模型评测工具"

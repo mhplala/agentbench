@@ -35,8 +35,8 @@ cat > "$CONTENTS/Info.plist" <<'PLIST'
   <key>CFBundleName</key><string>AgentBench</string>
   <key>CFBundleDisplayName</key><string>AgentBench</string>
   <key>CFBundleIdentifier</key><string>app.agentbench.mac</string>
-  <key>CFBundleVersion</key><string>6</string>
-  <key>CFBundleShortVersionString</key><string>1.0.5</string>
+  <key>CFBundleVersion</key><string>7</string>
+  <key>CFBundleShortVersionString</key><string>1.0.6</string>
   <key>CFBundleExecutable</key><string>AgentBench</string>
   <key>CFBundleIconFile</key><string>AppIcon</string>
   <key>CFBundlePackageType</key><string>APPL</string>

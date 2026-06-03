@@ -7,7 +7,7 @@ cd "$(dirname "$0")"
 # pinned by hash (two identities share the same name → name would be ambiguous)
 DEVID="${AGENTBENCH_SIGN_ID:-9E96E6F329CAC93BD47EBD01100ABD51C32A4D1B}"
 PROFILE="siku"
-VERSION="1.0.5"
+VERSION="1.0.6"
 APP="build/AgentBench.app"
 DMG="build/AgentBench-$VERSION.dmg"
 
