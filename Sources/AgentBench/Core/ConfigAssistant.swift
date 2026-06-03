@@ -198,20 +198,34 @@ enum ConfigAssistant {
         - `<bin> --help` 查看它真实支持的参数，避免编造不存在的选项（比如 claude 没有 `--cwd`）；
         - 用一个最小 prompt 真跑一次该命令模板，确认能跑通。
         请边测边定，确保 args / resumeArgs 里的参数都是该 CLI 真实存在的。
+        **强烈建议第一步先读 cc-switch DB**（`sqlite3 ~/.cc-switch/cc-switch.db "SELECT app_type,name,settings_config FROM providers"`）：那里有用户已经配好、验证过的 base_url / token / 接入点 ID(ep-) / 模型名，直接复用比自己猜可靠得多。
 
-        # claude 接第三方中转（重要经验）
-        给 claude（parser="claude"）配自定义中转 agent（如火山 ark、各家 Anthropic 兼容网关）时：
-        - 注入 `ANTHROPIC_BASE_URL` + `ANTHROPIC_AUTH_TOKEN`（放进顶层 env 或让用户已配在运行环境变量里）。
-        - **args 里必须带 `--bare`**！否则 claude 会优先用本机 OAuth 登录态、忽略注入的 token，去打中转 → 鉴权失败。例：`["-p","{task}","--output-format","stream-json","--verbose","--dangerously-skip-permissions","--bare"]`。
-        - 注意：claude 只能连 **Anthropic 兼容**端点。若中转只有 OpenAI 接口（如火山 ark 的 /api/v3 只支持 chat/completions），claude 仍连不上（无 /v1/messages）。这种情况建议改用 opencode（其 doubao provider 已 OpenAI 兼容）。
-        - **模型名映射（极易踩坑）**：claude 默认按别名请求（sonnet/opus/haiku → 它内置的 claude-sonnet-4-x 等），但中转通常只认它自己的模型名（如小米 mimo 的 base_url=.../anthropic 只认 `mimo-v2.5-pro`）→ 别名打过去 400/404。两种解法，**至少做一种**：① 把该 agent 的 `models` 设成中转模型名（如 `["mimo-v2.5-pro"]`），运行时会 `--model mimo-v2.5-pro` 传过去；② 在 env 里加 `ANTHROPIC_DEFAULT_SONNET_MODEL`/`OPUS`/`HAIKU`（及对应 `_NAME`）= 该模型名，把所有别名映射过去——cc-switch 正是这么做的（可从其 DB `app_type='claude'` 的 provider 的 env 里直接读到这些键值）。
+        # 第三方中转（火山 ark / 豆包 / 小米 等）——按这套来，已踩过的坑都在这
 
-        # codex 接第三方中转（重要经验）
-        给 codex 配自定义 OpenAI 兼容 provider（火山 ark / doubao / 各家中转）时：
-        - **`wire_api` 用 `"chat"`，不要用 `"responses"`**——Responses API 下 codex 会发它自带的工具定义，第三方中转常不认（典型报错：`unknown tool type: ...` / BadRequest param=tool.type）。chat/completions 兼容性最好。
-        - base_url 用中转给的（如 `https://ark.cn-beijing.volces.com/api/v3`）；env_key 指向运行环境里的 key 名。
-        - model 用中转支持的模型名或**接入点 ID（ep-...）**——拿不准就在 cc-switch 配置里看现成可用的那个。
-        - 可用 `codex exec --json -c model_provider=... -c 'model_providers.X.base_url=...' -c 'model_providers.X.wire_api="chat"' -c 'model_providers.X.env_key="..."' -m <model> "测试"` 实跑验证。
+        ## 1) 端点协议要分清（选错必失败）
+        - **claude**（parser="claude"）只会 Anthropic Messages 协议：接 ark 用 **`https://ark.cn-beijing.volces.com/api/compatible/`**（实测可用，别用 /api/v3）；其它网关用其 Anthropic 兼容入口（常含 /anthropic）。
+        - **codex / opencode** 走 OpenAI chat：用 OpenAI 兼容入口（ark 用 **`https://ark.cn-beijing.volces.com/api/v3`**，小米用 `.../v1`）。
+
+        ## 2) 模型必须是真实标识，且要主动去查（最常见的失败原因！）
+        model 不能瞎起名（填 "ark-wanjun" 这类自起名 → 404 "model may not exist"）。必须是：
+        - ark 的**接入点 ID `ep-xxxxxxxxxxxxx-xxxxx`**（控制台 在线推理→接入点 创建后得到），或
+        - 该中转真实模型名（如 `mimo-v2.5-pro`、`doubao-pro-32k-240615`）。
+        **不要猜，去查**：
+        - `sqlite3 ~/.cc-switch/cc-switch.db "SELECT app_type,name,settings_config FROM providers"` → 里面有现成的 `ep-...` / model / base_url / token，直接复用最稳。
+        - 列模型：ark `curl -s https://ark.cn-beijing.volces.com/api/v3/models -H "Authorization: Bearer <key>"`；OpenAI 兼容 `curl -s <base>/models -H "Authorization: Bearer <key>"`。
+
+        ## 3) claude 接中转
+        - env 注入 `ANTHROPIC_BASE_URL`(用 /api/compatible/) + `ANTHROPIC_AUTH_TOKEN`；args **必须带 `--bare`**（否则 claude 用本机 OAuth、忽略 token）。
+        - **模型别名映射（必做）**：claude 默认按 sonnet/opus/haiku 别名请求，中转不认 → 必须映射到真实模型：env 里加 `ANTHROPIC_DEFAULT_SONNET_MODEL`/`OPUS`/`HAIKU` = 该 `ep-`/模型名，并把 `models` 也设成它、modelArgs=`["--model","{model}"]`。
+        - 例 env：`{"ANTHROPIC_BASE_URL":".../api/compatible/","ANTHROPIC_AUTH_TOKEN":"...","ANTHROPIC_DEFAULT_SONNET_MODEL":"ep-xxx","ANTHROPIC_DEFAULT_OPUS_MODEL":"ep-xxx","ANTHROPIC_DEFAULT_HAIKU_MODEL":"ep-xxx"}`，`models:["ep-xxx"]`。
+
+        ## 4) codex 接中转（不要再手搓 -c / wire_api！）
+        新版 codex 只支持 Responses 协议、已移除 `wire_api="chat"`；而多数中转只有 chat/completions。**AgentBench 内置了 Responses→chat 本地代理会自动处理**，所以你只需最简配置：
+        - `parser:"codex"`、`bin:"codex"`、`models:["ep-/模型名"]`、`modelArgs:["-m","{model}"]`
+        - `args:["exec","{task}","--json","-C","{workdir}","--skip-git-repo-check"]`（标准的，别加 -c）
+        - `env:{"OPENAI_BASE_URL":"<OpenAI兼容base>","OPENAI_API_KEY":"<key>"}`
+        - **绝不要**往 args 里塞 `-c model_provider=...` / `wire_api` —— app 运行时会自动注入并路由到内置代理，手塞反而冲突。
+        - 验证：直接用上面的 args + env 跑（app 的代理在运行时才接管；命令行手测可临时用 `-c model_provider=x -c 'model_providers.x.base_url="<base>"' -c 'model_providers.x.wire_api="chat"' -c 'model_providers.x.env_key="OPENAI_API_KEY"'`，但**写进 agents.json 时不要带这些**）。
 
         # 环境变量（重要）
         有些 agent/provider 需要环境变量里的 API key（例如 codex 自定义 provider 的 env_key 引用 ARK_API_KEY / OPENAI_API_KEY）。
