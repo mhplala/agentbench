@@ -224,9 +224,14 @@ struct CodexAdapter: AgentAdapter {
     }
 
     func resumeArgs(message: String, model: String, workdir: String, sessionId: String?, autoApprove: Bool) -> [String] {
+        // NOTE: `codex exec resume` does NOT accept `-C <dir>` (that's a `codex exec`
+        // flag) — passing it errors with "unexpected argument '-C'" → no output. cwd is
+        // set by the process's working directory instead. But `--skip-git-repo-check`
+        // IS needed (the isolated copy isn't a trusted git dir, else resume aborts with
+        // "Not inside a trusted directory").
         var a = ["exec", "resume"]
         if let sid = sessionId { a += [sid] } else { a += ["--last"] }
-        a += [message, "--json", "--skip-git-repo-check", "-C", workdir] + reasoningArgs
+        a += [message, "--json", "--skip-git-repo-check"] + reasoningArgs
         if !model.isEmpty { a += ["-m", model] }
         a += autoApprove ? ["--dangerously-bypass-approvals-and-sandbox"] : ["--full-auto"]
         return a
