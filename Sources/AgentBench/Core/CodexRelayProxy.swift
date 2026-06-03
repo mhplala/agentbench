@@ -230,6 +230,7 @@ final class CodexRelayProxy: @unchecked Sendable {
         let choice = (chatResponse["choices"] as? [[String: Any]])?.first
         let msg = choice?["message"] as? [String: Any]
         let text = (msg?["content"] as? String) ?? ""
+        let reasoning = (msg?["reasoning_content"] as? String) ?? (msg?["reasoning"] as? String) ?? ""
         let toolCalls = (msg?["tool_calls"] as? [[String: Any]]) ?? []
         let usage = chatResponse["usage"] as? [String: Any]
         let respId = "resp_" + UUID().uuidString.prefix(24)
@@ -249,6 +250,23 @@ final class CodexRelayProxy: @unchecked Sendable {
         emit("response.in_progress", ["response": baseResp])
 
         var idx = 0
+        // reasoning: chat providers return the thinking as `reasoning_content`; surface
+        // it as a Responses reasoning item so codex (and thus AgentBench) shows it.
+        if !reasoning.isEmpty {
+            let itemId = "rs_" + UUID().uuidString.prefix(20)
+            let item: [String: Any] = ["id": itemId, "type": "reasoning", "summary": []]
+            emit("response.output_item.added", ["output_index": idx, "item": item])
+            let part: [String: Any] = ["type": "summary_text", "text": ""]
+            emit("response.reasoning_summary_part.added", ["item_id": itemId, "output_index": idx, "summary_index": 0, "part": part])
+            emit("response.reasoning_summary_text.delta", ["item_id": itemId, "output_index": idx, "summary_index": 0, "delta": reasoning])
+            emit("response.reasoning_summary_text.done", ["item_id": itemId, "output_index": idx, "summary_index": 0, "text": reasoning])
+            let donePart: [String: Any] = ["type": "summary_text", "text": reasoning]
+            emit("response.reasoning_summary_part.done", ["item_id": itemId, "output_index": idx, "summary_index": 0, "part": donePart])
+            let doneItem: [String: Any] = ["id": itemId, "type": "reasoning",
+                                           "summary": [["type": "summary_text", "text": reasoning]]]
+            emit("response.output_item.done", ["output_index": idx, "item": doneItem])
+            output.append(doneItem); idx += 1
+        }
         // assistant text message
         if !text.isEmpty {
             let itemId = "msg_" + UUID().uuidString.prefix(20)
