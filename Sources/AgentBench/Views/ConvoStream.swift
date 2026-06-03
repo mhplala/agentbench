@@ -207,11 +207,8 @@ struct AnswerCard: View {
             AgentGlyph(agentId: app.live.configs.indices.contains(lane) ? app.live.configs[lane].agentId : "claude-code",
                        lane: lane, box: 26)
             VStack(alignment: .leading, spacing: 10) {
-                // summary reads as plain prose, not a nested card
-                Text(turn.summary)
-                    .font(Theme.ui(13.5)).foregroundStyle(Theme.ink)
-                    .textSelection(.enabled)
-                    .fixedSize(horizontal: false, vertical: true)
+                // summary renders Markdown (headings/lists/bold/code), as plain prose
+                MarkdownText(text: turn.summary)
                     .frame(maxWidth: .infinity, alignment: .leading)
 
                 if !turn.files.isEmpty {

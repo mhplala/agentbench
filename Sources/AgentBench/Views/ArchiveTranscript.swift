@@ -181,10 +181,7 @@ struct ArchiveAnswerCard: View {
         HStack(alignment: .top, spacing: 10) {
             AgentGlyph(agentId: cfg.agentId, lane: lane, box: 26)
             VStack(alignment: .leading, spacing: 0) {
-                Text(turn.summary)
-                    .font(Theme.ui(13.5)).foregroundStyle(Theme.ink)
-                    .textSelection(.enabled)
-                    .fixedSize(horizontal: false, vertical: true)
+                MarkdownText(text: turn.summary)
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(.horizontal, 15).padding(.vertical, 13)
 
