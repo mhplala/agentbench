@@ -248,6 +248,12 @@ enum AgentRunner {
             let drop = sandbox ? "--dangerously-bypass-approvals-and-sandbox" : "--full-auto"
             var a = args.filter { $0 != drop }
             if !a.contains(want) { a.append(want) }
+            // codex's workspace-write sandbox DENIES network by default, so the agent's
+            // shell tools (curl/pip/…) can't reach the internet. Allow it so a sandboxed
+            // codex can still fetch/install like the seatbelt-wrapped agents do.
+            if sandbox, !a.contains(where: { $0.contains("network_access") }) {
+                a += ["-c", "sandbox_workspace_write.network_access=true"]
+            }
             return (exe, a)
         }
         guard sandbox else { return (exe, args) }
