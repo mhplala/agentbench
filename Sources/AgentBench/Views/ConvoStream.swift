@@ -195,8 +195,9 @@ struct AnswerCard: View {
                     .frame(maxWidth: .infinity, alignment: .leading)
 
                 if !turn.files.isEmpty {
+                    let wd = app.live.runs.indices.contains(lane) ? app.live.runs[lane].workdir : nil
                     VStack(alignment: .leading, spacing: 6) {
-                        ForEach(turn.files) { f in FileRow(f: f) }
+                        ForEach(turn.files) { f in FileRow(f: f, baseDir: wd) }
                     }
                     .padding(11)
                     .panel(Theme.rSm, fill: Theme.panel2, stroke: Theme.line2)
@@ -213,8 +214,32 @@ struct AnswerCard: View {
 
 struct FileRow: View {
     let f: FileChange
+    var baseDir: String? = nil       // the lane's workspace; nil/purged → not clickable
+    @State private var hover = false
+
     private var isDeleted: Bool { f.deleted == true }
+    private var fileURL: URL? { isDeleted ? nil : FinderOpen.fileURL(base: baseDir, rel: f.path) }
+    private var openable: Bool { FinderOpen.exists(fileURL) }
+
     var body: some View {
+        if openable, let url = fileURL {
+            Button { FinderOpen.open(url) } label: { content }
+                .buttonStyle(.plain)
+                .background((hover ? Theme.line2.opacity(0.5) : .clear)
+                    .clipShape(RoundedRectangle(cornerRadius: Theme.rXs)))
+                .onHover { hover = $0 }
+                .pointingHand()
+                .help("点击用默认 App 打开 · 右键在 Finder 中显示")
+                .contextMenu {
+                    Button { FinderOpen.open(url) } label: { Label("打开", systemImage: "arrow.up.forward.app") }
+                    Button { FinderOpen.reveal(url) } label: { Label("在 Finder 中显示", systemImage: "folder") }
+                }
+        } else {
+            content
+        }
+    }
+
+    private var content: some View {
         HStack(spacing: 8) {
             SFIcon(name: isDeleted ? "x" : "edit", size: 12)
                 .foregroundStyle(isDeleted ? Theme.delFG : Theme.ink3)
@@ -222,6 +247,10 @@ struct FileRow: View {
                 .foregroundStyle(isDeleted ? Theme.ink3 : Theme.ink)
                 .strikethrough(isDeleted)
                 .lineLimit(1).truncationMode(.middle)
+            if openable {
+                SFIcon(name: "arrow.up.forward", size: 9).foregroundStyle(Theme.ink3)
+                    .opacity(hover ? 1 : 0.45)
+            }
             Spacer(minLength: 6)
             if isDeleted {
                 Text("已删除").font(Theme.mono(11.5, .semibold)).foregroundStyle(Theme.delFG)
@@ -230,6 +259,8 @@ struct FileRow: View {
                 if f.del > 0 { Text("−\(f.del)").font(Theme.mono(11.5, .semibold)).foregroundStyle(Theme.delFG) }
             }
         }
+        .padding(.horizontal, 4).padding(.vertical, 2)
+        .contentShape(Rectangle())
     }
 }
 
@@ -264,6 +295,14 @@ struct ArtifactViewer: View {
         return FileManager.default.fileExists(atPath: f.path)
     }
 
+    // The lane's isolated workspace, if it still exists on disk (purged for old runs).
+    private var workdirURL: URL? {
+        guard app.live.runs.indices.contains(lane) else { return nil }
+        let wd = app.live.runs[lane].workdir
+        guard !wd.isEmpty, FileManager.default.fileExists(atPath: wd) else { return nil }
+        return URL(fileURLWithPath: wd)
+    }
+
     var body: some View {
         VStack(spacing: 0) {
             HStack(spacing: 8) {
@@ -275,6 +314,9 @@ struct ArtifactViewer: View {
                 // only offer "open in browser" when there's an actual file on disk to
                 // open — openInBrowser needs previewFileURL, so an inline-only preview
                 // would make the button a no-op.
+                if let wd = workdirURL {
+                    IconButton(icon: "folder", help: "在 Finder 中打开产物文件夹", size: 13) { FinderOpen.reveal(wd) }
+                }
                 if canOpenInBrowser {
                     IconButton(icon: "browser", help: "在浏览器打开", size: 13) { app.openInBrowser(lane) }
                 }

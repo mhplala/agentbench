@@ -171,6 +171,11 @@ struct ArchiveAnswerCard: View {
         guard let f = run.previewFileURL else { return false }
         return FileManager.default.fileExists(atPath: f.path)
     }
+    // The lane's isolated workspace, if it still exists (purged for old archives).
+    private var workdirURL: URL? {
+        guard !run.workdir.isEmpty, FileManager.default.fileExists(atPath: run.workdir) else { return nil }
+        return URL(fileURLWithPath: run.workdir)
+    }
 
     var body: some View {
         HStack(alignment: .top, spacing: 10) {
@@ -185,7 +190,7 @@ struct ArchiveAnswerCard: View {
 
                 if !turn.files.isEmpty {
                     VStack(alignment: .leading, spacing: 6) {
-                        ForEach(turn.files) { f in FileRow(f: f) }
+                        ForEach(turn.files) { f in FileRow(f: f, baseDir: run.workdir) }
                     }
                     .padding(.horizontal, 15).padding(.bottom, 13)
                     .overlay(Rectangle().frame(height: 1).foregroundStyle(Theme.line2), alignment: .bottom)
@@ -207,6 +212,10 @@ struct ArchiveAnswerCard: View {
                                    : (turn.previewHTML == nil ? "无可渲染预览" : "渲染产物"))
                     .font(Theme.mono(10.5)).foregroundStyle(Theme.ink3)
                     .lineLimit(1)
+                if let wd = workdirURL {
+                    Button { FinderOpen.reveal(wd) } label: { SFIcon(name: "folder", size: 13).foregroundStyle(Theme.ink3) }
+                        .buttonStyle(.plain).help("在 Finder 中打开产物文件夹").padding(.leading, 8)
+                }
                 if turn.previewHTML != nil, fileStillOnDisk {
                     Button {
                         if let f = run.previewFileURL {
