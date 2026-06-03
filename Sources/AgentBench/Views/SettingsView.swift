@@ -78,7 +78,7 @@ struct SettingsView: View {
                 section("环境") {
                     ForEach(app.availabilities) { a in
                         HStack(spacing: 10) {
-                            Text(a.spec.glyph).font(.system(size: 14))
+                            BrandIcon(agentId: a.id, box: 22)
                             VStack(alignment: .leading, spacing: 2) {
                                 Text(a.spec.name).font(Theme.ui(13, .semibold)).foregroundStyle(Theme.ink)
                                 Text(a.installed ? (a.path ?? "") : "未安装 · \(a.spec.installHint)")

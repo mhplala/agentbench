@@ -185,7 +185,7 @@ struct EnvBar: View {
             FlowLayout(spacing: 8) {
                 ForEach(app.availabilities) { a in
                     HStack(spacing: 6) {
-                        Text(a.spec.glyph).font(.system(size: 12))
+                        BrandIcon(agentId: a.id, box: 16)
                         Text(a.spec.name).font(Theme.ui(12, .medium))
                         if a.installed {
                             SFIcon(name: "check", size: 10).foregroundStyle(Theme.good)
@@ -239,7 +239,7 @@ struct AgentSlotView: View {
                     Button { app.removeLane(lane) } label: { SFIcon(name: "x", size: 12).foregroundStyle(Theme.ink3) }
                         .buttonStyle(.plain).help("移除该 agent")
                 }
-                Text(spec.glyph).font(.system(size: 20)).foregroundStyle(Theme.ink2)
+                BrandIcon(agentId: cfg.agentId, box: 24)
             }
 
             field("Agent") {

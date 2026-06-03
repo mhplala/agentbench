@@ -40,19 +40,10 @@ struct SFIcon: View {
 
 struct AgentGlyph: View {
     let agentId: String
-    let lane: Int
+    let lane: Int                 // kept for API compatibility; identity now comes from the brand mark
     var box: CGFloat = 25
-    private var primary: Bool { lane == 0 }   // lane 0 filled, others outlined
     var body: some View {
-        let spec = AgentCatalog.spec(agentId)
-        Text(spec.glyph)
-            .font(.system(size: box * 0.56))
-            .frame(width: box, height: box)
-            .background(primary ? Theme.ink : Theme.panel)
-            .foregroundStyle(primary ? .white : Theme.ink)
-            .overlay(RoundedRectangle(cornerRadius: box * 0.28)
-                .stroke(primary ? .clear : Theme.ink, lineWidth: 1.5))
-            .clipShape(RoundedRectangle(cornerRadius: box * 0.28))
+        BrandIcon(agentId: agentId, box: box)
     }
 }
 
