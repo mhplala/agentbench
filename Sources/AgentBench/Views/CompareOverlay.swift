@@ -77,10 +77,15 @@ struct CompareOverlay: View {
                                         trusted: app.isTrusted(lane))
                             if !app.isTrusted(lane) { TrustBanner(lane: lane) }
                         }
+                    } else if let s = turn?.summary, !s.isEmpty {
+                        // no HTML → render the answer so the fullscreen compare is
+                        // useful for text / non-HTML outputs too
+                        ScrollView { MarkdownText(text: s).padding(18).frame(maxWidth: 760) }
+                            .frame(maxWidth: .infinity, maxHeight: .infinity).background(Theme.panel2)
                     } else {
                         VStack(spacing: 6) {
                             SFIcon(name: "info", size: 20).foregroundStyle(Theme.ink3)
-                            Text("无可渲染预览").foregroundStyle(Theme.ink3)
+                            Text("无产出可显示").foregroundStyle(Theme.ink3)
                         }.frame(maxWidth: .infinity, maxHeight: .infinity).background(Theme.panel2)
                     }
                 } else {

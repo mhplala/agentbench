@@ -326,7 +326,8 @@ struct ArtifactViewer: View {
                 Segmented(view: $app.artifactView)
                 Spacer()
                 Text(app.artifactView == "code" ? "\(turn.codeLineCount) 行"
-                                                 : (turn.previewHTML == nil ? "无可渲染预览" : "渲染产物"))
+                                                 : (turn.previewHTML != nil ? "渲染产物"
+                                                    : (turn.summary.isEmpty ? "无预览" : "回答预览")))
                     .font(Theme.mono(10.5)).foregroundStyle(Theme.ink3).lineLimit(1)
                 // only offer "open in browser" when there's an actual file on disk to
                 // open — openInBrowser needs previewFileURL, so an inline-only preview
@@ -354,6 +355,11 @@ struct ArtifactViewer: View {
                             if !app.isTrusted(lane) { TrustBanner(lane: lane) }
                         }
                         .frame(height: 300)
+                    } else if !turn.summary.isEmpty {
+                        // no renderable HTML → fall back to the rendered answer so the
+                        // preview (and 放大对比) isn't empty for text/non-HTML outputs
+                        ScrollView { MarkdownText(text: turn.summary).padding(12) }
+                            .frame(height: 300).background(Theme.panel2)
                     } else {
                         noPreview
                     }
