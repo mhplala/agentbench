@@ -248,11 +248,23 @@ enum AgentRunner {
             let drop = sandbox ? "--dangerously-bypass-approvals-and-sandbox" : "--full-auto"
             var a = args.filter { $0 != drop }
             if !a.contains(want) { a.append(want) }
-            // codex's workspace-write sandbox DENIES network by default, so the agent's
-            // shell tools (curl/pip/…) can't reach the internet. Allow it so a sandboxed
-            // codex can still fetch/install like the seatbelt-wrapped agents do.
-            if sandbox, !a.contains(where: { $0.contains("network_access") }) {
-                a += ["-c", "sandbox_workspace_write.network_access=true"]
+            // codex's workspace-write sandbox is narrower than our seatbelt profile: it
+            // denies network and only treats the workspace as writable. Open it up to
+            // match — network on, plus the same safe write roots (caches/user config) so
+            // pip --user / npm / build caches work — while writes still can't escape to
+            // the user's real project.
+            if sandbox {
+                if !a.contains(where: { $0.contains("network_access") }) {
+                    a += ["-c", "sandbox_workspace_write.network_access=true"]
+                }
+                if !a.contains(where: { $0.contains("writable_roots") }) {
+                    let h = NSHomeDirectory()
+                    let roots = ["/tmp", "\(h)/.cache", "\(h)/.npm", "\(h)/.local", "\(h)/.cargo",
+                                 "\(h)/.codex", "\(h)/.config", "\(h)/.cursor", "\(h)/.aider",
+                                 "\(h)/Library/Caches"]
+                    let toml = "[" + roots.map { "\"\($0)\"" }.joined(separator: ",") + "]"
+                    a += ["-c", "sandbox_workspace_write.writable_roots=\(toml)"]
+                }
             }
             return (exe, a)
         }
