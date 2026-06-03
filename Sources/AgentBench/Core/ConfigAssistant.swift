@@ -114,11 +114,22 @@ enum ConfigAssistant {
             let tmp = NSTemporaryDirectory() + "agentbench-verify-" + UUID().uuidString.prefix(8)
             try? FileManager.default.createDirectory(atPath: tmp, withIntermediateDirectories: true)
             let model = spec.models.first ?? ""
+            // Mirror the REAL run pipeline so verify reflects what actually happens —
+            // otherwise codex relays (no -c proxy routing) and claude relays (no env /
+            // model) falsely fail here while running fine. Inject the agent's own
+            // recipe env + global customEnv + proposal env, then apply the same
+            // --bare / codex -c proxy / sandbox / clean-env handling.
+            var runEnv = (UserDefaults.standard.dictionary(forKey: "customEnv") as? [String: String]) ?? [:]
+            for (k, v) in env { runEnv[k] = v }
+            for (k, v) in spec.recipe!.env { runEnv[k] = v }
             var args = adapter.command(task: "只回复一个词：OK。不要做其它任何事。", model: model, workdir: tmp, autoApprove: true)
-            args = AgentRunner.bareIfCustomToken(args, agentId: spec.id, env: env)   // match real runs
+            args = AgentRunner.bareIfCustomToken(args, agentId: spec.id, env: runEnv)
+            args = AgentRunner.codexProviderArgs(args, agentId: spec.id, env: runEnv)
+            let (exe, finalArgs) = AgentRunner.sandboxWrap(bin, args, workdir: tmp, agentId: spec.id, sandbox: false)
+            let drop = AgentRunner.anthropicCleanKeys(agentId: spec.id, env: runEnv)
 
             let collector = TextCollector()
-            let runTask = Task { await ProcessRunner.run(executable: bin, args: args, cwd: tmp, extraEnv: env) {
+            let runTask = Task { await ProcessRunner.run(executable: exe, args: finalArgs, cwd: tmp, extraEnv: runEnv, dropEnvKeys: drop) {
                 if !$0.text.isEmpty { collector.addLine(($0.isErr ? "! " : "") + $0.text) } } }
             let timeoutTask = Task { try? await Task.sleep(nanoseconds: timeoutSec * 1_000_000_000); runTask.cancel() }
             let code = await runTask.value
