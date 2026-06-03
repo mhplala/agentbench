@@ -105,17 +105,37 @@ struct TurnView: View {
         }
     }
 
+    private var canUndoAuto: Bool {
+        turn.kind == .user && turn.summary.contains("自动应答")
+            && app.live.runs.indices.contains(lane) && app.live.runs[lane].status != .running
+    }
+
     private var userView: some View {
         HStack(alignment: .top, spacing: 10) {
             Text("你").font(Theme.ui(11, .semibold)).foregroundStyle(.white)
                 .frame(width: 22, height: 22).background(Theme.ink)
                 .clipShape(RoundedRectangle(cornerRadius: 6))
-            Text(turn.summary).font(Theme.ui(13.5)).foregroundStyle(Theme.ink)
-                .fixedSize(horizontal: false, vertical: true)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(.horizontal, 12).padding(.vertical, 9)
-                .background(Color(hex: 0x14141A, alpha: 0.05))
-                .clipShape(RoundedRectangle(cornerRadius: Theme.rSm))
+            VStack(alignment: .leading, spacing: 6) {
+                Text(turn.summary).font(Theme.ui(13.5)).foregroundStyle(Theme.ink)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.horizontal, 12).padding(.vertical, 9)
+                    .background(Color(hex: 0x14141A, alpha: 0.05))
+                    .clipShape(RoundedRectangle(cornerRadius: Theme.rSm))
+                if canUndoAuto {
+                    Button { app.undoAutoAnswer(lane) } label: {
+                        HStack(spacing: 5) {
+                            SFIcon(name: "arrow.uturn.backward", size: 11)
+                            Text("撤销自动应答 · 改我来回复").font(Theme.ui(11.5, .semibold))
+                        }
+                        .foregroundStyle(Theme.ink2)
+                        .padding(.horizontal, 9).padding(.vertical, 4)
+                        .overlay(Capsule().stroke(Theme.line3, lineWidth: 1))
+                    }
+                    .buttonStyle(.plain)
+                    .help("退回到该 agent 提问的状态，再用底部输入栏（目标选「仅 \(Lane.label(lane))」）手动回复")
+                }
+            }
         }
         .padding(.top, 4)
     }

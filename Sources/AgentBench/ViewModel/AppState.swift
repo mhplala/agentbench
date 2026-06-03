@@ -326,6 +326,20 @@ final class AppState: ObservableObject {
         }
     }
 
+    // Undo a lane's auto-answered "你决定" turns (and the agent's responses to them),
+    // reverting it to where it asked the question — so the user can reply manually.
+    func undoAutoAnswer(_ lane: Int) {
+        guard live.runs.indices.contains(lane), live.runs[lane].status != .running else { return }
+        let turns = live.runs[lane].turns
+        guard let firstAuto = turns.firstIndex(where: { $0.kind == .user && $0.summary.contains("自动应答") }) else { return }
+        runTask?.cancel(); judgeTask?.cancel()
+        live.runs[lane].turns = Array(turns.prefix(firstAuto))
+        live.runs[lane].status = .done
+        live.verdict = nil; live.vote = nil; live.judgeError = nil   // the outcome changed
+        judgeOpen = false; judging = false
+        persistLive()
+    }
+
     // Manually re-run the judge (e.g. after a transient failure).
     func retryJudge() {
         guard livePhase == .done, live.judgeOn, live.runs.allSatisfy({ $0.status == .done }),
