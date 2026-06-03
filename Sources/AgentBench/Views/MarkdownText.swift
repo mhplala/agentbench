@@ -20,6 +20,7 @@ struct MarkdownText: View {
     private enum Block {
         case heading(Int, String), bullet(String), ordered(String, String)
         case quote(String), code(String), rule, paragraph(String), blank
+        case table([String], [[String]])
     }
 
     @ViewBuilder private func block(_ b: Block) -> some View {
@@ -56,6 +57,28 @@ struct MarkdownText: View {
                 .clipShape(RoundedRectangle(cornerRadius: Theme.rXs))
         case .rule:
             Rectangle().frame(height: 1).foregroundStyle(Theme.line2).padding(.vertical, 2)
+        case .table(let headers, let rows):
+            let tf = base - 2   // tables render a notch smaller
+            Grid(alignment: .leading, horizontalSpacing: 12, verticalSpacing: 4) {
+                GridRow {
+                    ForEach(headers.indices, id: \.self) { c in
+                        inline(headers[c]).font(Theme.ui(tf, .bold)).foregroundStyle(Theme.ink)
+                    }
+                }
+                Divider().gridCellColumns(max(1, headers.count))
+                ForEach(rows.indices, id: \.self) { r in
+                    GridRow {
+                        ForEach(headers.indices, id: \.self) { c in
+                            inline(c < rows[r].count ? rows[r][c] : "")
+                                .font(Theme.ui(tf)).foregroundStyle(Theme.ink2)
+                        }
+                    }
+                }
+            }
+            .padding(8).background(Theme.panel2)
+            .overlay(RoundedRectangle(cornerRadius: Theme.rXs).stroke(Theme.line2, lineWidth: 1))
+            .clipShape(RoundedRectangle(cornerRadius: Theme.rXs))
+            .frame(maxWidth: .infinity, alignment: .leading)
         case .paragraph(let s):
             inline(s).font(Theme.ui(base)).foregroundStyle(Theme.ink)
                 .fixedSize(horizontal: false, vertical: true)
@@ -78,28 +101,59 @@ struct MarkdownText: View {
 
     private func parse() -> [Block] {
         var out: [Block] = []
+        let lines = text.components(separatedBy: "\n")
+        var i = 0
         var inCode = false
         var codeBuf: [String] = []
-        for raw in text.components(separatedBy: "\n") {
+        while i < lines.count {
+            let raw = lines[i]
             let t = raw.trimmingCharacters(in: .whitespaces)
             if t.hasPrefix("```") {
                 if inCode { out.append(.code(codeBuf.joined(separator: "\n"))); codeBuf = []; inCode = false }
                 else { inCode = true }
-                continue
+                i += 1; continue
             }
-            if inCode { codeBuf.append(raw); continue }
-            if t.isEmpty { out.append(.blank); continue }
-            if t == "---" || t == "***" || t == "___" { out.append(.rule); continue }
-            if let h = heading(t) { out.append(.heading(h.0, h.1)); continue }
-            if t.hasPrefix("> ") { out.append(.quote(String(t.dropFirst(2)))); continue }
+            if inCode { codeBuf.append(raw); i += 1; continue }
+            // table: a "| … |" row immediately followed by a |---|---| separator
+            if t.contains("|"), i + 1 < lines.count, isTableSeparator(lines[i + 1]) {
+                let headers = tableCells(t)
+                var rows: [[String]] = []
+                var j = i + 2
+                while j < lines.count {
+                    let rt = lines[j].trimmingCharacters(in: .whitespaces)
+                    guard !rt.isEmpty, rt.contains("|") else { break }
+                    rows.append(tableCells(rt)); j += 1
+                }
+                out.append(.table(headers, rows)); i = j; continue
+            }
+            if t.isEmpty { out.append(.blank); i += 1; continue }
+            if t == "---" || t == "***" || t == "___" { out.append(.rule); i += 1; continue }
+            if let h = heading(t) { out.append(.heading(h.0, h.1)); i += 1; continue }
+            if t.hasPrefix("> ") { out.append(.quote(String(t.dropFirst(2)))); i += 1; continue }
             if t.hasPrefix("- ") || t.hasPrefix("* ") || t.hasPrefix("• ") {
-                out.append(.bullet(String(t.dropFirst(2)))); continue
+                out.append(.bullet(String(t.dropFirst(2)))); i += 1; continue
             }
-            if let o = ordered(t) { out.append(.ordered(o.0, o.1)); continue }
-            out.append(.paragraph(t))
+            if let o = ordered(t) { out.append(.ordered(o.0, o.1)); i += 1; continue }
+            out.append(.paragraph(t)); i += 1
         }
         if inCode, !codeBuf.isEmpty { out.append(.code(codeBuf.joined(separator: "\n"))) }
         return out
+    }
+
+    private func tableCells(_ line: String) -> [String] {
+        var s = line.trimmingCharacters(in: .whitespaces)
+        if s.hasPrefix("|") { s.removeFirst() }
+        if s.hasSuffix("|") { s.removeLast() }
+        return s.components(separatedBy: "|").map { $0.trimmingCharacters(in: .whitespaces) }
+    }
+
+    private func isTableSeparator(_ line: String) -> Bool {
+        let cells = tableCells(line)
+        guard cells.count >= 1, line.contains("|") else { return false }
+        return cells.allSatisfy { c in
+            let x = c.replacingOccurrences(of: ":", with: "")
+            return !x.isEmpty && x.allSatisfy { $0 == "-" }
+        }
     }
 
     private func heading(_ t: String) -> (Int, String)? {
