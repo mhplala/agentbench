@@ -41,6 +41,22 @@ enum AgentConfigFile {
         return file.agents.map(spec(from:))
     }
 
+    static func loadFile() -> UserAgentsFile {
+        guard let data = try? Data(contentsOf: url),
+              let file = try? JSONDecoder().decode(UserAgentsFile.self, from: data) else { return UserAgentsFile(agents: []) }
+        return file
+    }
+
+    // Add (or replace by id) a single agent and persist. Used by the quick-add form.
+    static func upsert(_ agent: UserAgent) {
+        var file = loadFile()
+        file.agents.removeAll { $0.id == agent.id }
+        file.agents.append(agent)
+        let enc = JSONEncoder()
+        enc.outputFormatting = [.prettyPrinted, .sortedKeys, .withoutEscapingSlashes]
+        if let data = try? enc.encode(file) { try? data.write(to: url, options: .atomic) }
+    }
+
     static func spec(from u: UserAgent) -> AgentSpec {
         AgentSpec(
             id: u.id, name: u.name, vendor: u.vendor ?? "Custom",

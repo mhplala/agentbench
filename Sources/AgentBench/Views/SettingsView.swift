@@ -5,6 +5,7 @@ struct SettingsView: View {
     @EnvironmentObject var app: AppState
     @ObservedObject var prefs = Prefs.shared
     @State private var showAssistant = false
+    @State private var showQuickAdd = false
 
     var body: some View {
         VStack(spacing: 0) {
@@ -112,6 +113,7 @@ struct SettingsView: View {
                         .fixedSize(horizontal: false, vertical: true)
                     Text(AgentConfigFile.url.path).font(Theme.mono(11)).foregroundStyle(Theme.ink2)
                         .textSelection(.enabled).lineLimit(1).truncationMode(.middle)
+                    Button { showQuickAdd = true } label: { settingBtn("plus", "快速添加 provider（填 Key / URL / 模型）") }.buttonStyle(.plain)
                     HStack(spacing: 10) {
                         Button { showAssistant = true } label: { settingBtn("spark", "配置助手（用 agent 帮你配）") }.buttonStyle(.plain)
                         Button {
@@ -155,6 +157,9 @@ struct SettingsView: View {
         }
         .sheet(isPresented: $showAssistant) {
             ConfigAssistantView().environmentObject(app)
+        }
+        .sheet(isPresented: $showQuickAdd) {
+            ProviderQuickAddView().environmentObject(app)
         }
     }
 
