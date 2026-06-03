@@ -56,6 +56,7 @@ struct WorkspaceView: View {
 
 struct Convo: View {
     @EnvironmentObject var app: AppState
+    @Environment(\.density) private var density
     private var maxW: CGFloat { app.live.laneCount > 2 ? 1640 : 1100 }
     var body: some View {
         ScrollView {
@@ -73,16 +74,152 @@ struct Convo: View {
                         .clipShape(RoundedRectangle(cornerRadius: Theme.r))
                         .cardShadow()
                 }
-                HStack(alignment: .top, spacing: 14) {
-                    ForEach(app.live.configs.indices, id: \.self) { i in
-                        ConvoColumn(run: app.live.runs[i], cfg: app.live.configs[i], lane: i)
+                VStack(spacing: 0) {
+                    HStack(alignment: .top, spacing: 0) {
+                        ForEach(app.live.laneIndices, id: \.self) { i in
+                            ConvoLaneHeader(run: app.live.runs[i], cfg: app.live.configs[i], lane: i)
+                                .frame(maxWidth: .infinity)
+                            if i < app.live.laneIndices.upperBound - 1 {
+                                Rectangle().frame(width: 1).foregroundStyle(Theme.line2)
+                            }
+                        }
                     }
+                    .background(Theme.panel2)
+                    .overlay(Rectangle().frame(height: 1).foregroundStyle(Theme.line2), alignment: .bottom)
+
+                    VStack(spacing: density.turnGap) {
+                        ForEach(rounds) { round in
+                            HStack(alignment: .top, spacing: 0) {
+                                ForEach(app.live.laneIndices, id: \.self) { lane in
+                                    ConvoRoundCell(
+                                        turns: round.turns[lane] ?? [],
+                                        run: app.live.runs[lane],
+                                        lane: lane,
+                                        isFirstRound: round.index == 0,
+                                        isLastRound: round.index == rounds.last?.index
+                                    )
+                                    .frame(maxWidth: .infinity, alignment: .topLeading)
+                                    if lane < app.live.laneIndices.upperBound - 1 {
+                                        Rectangle().frame(width: 1).foregroundStyle(Theme.line2)
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    .padding(density.cardPad)
                 }
+                .panel()
             }
             .frame(maxWidth: maxW).frame(maxWidth: .infinity)
             .padding(.horizontal, 22).padding(.vertical, 24)
         }
         .background(Theme.bg)
+    }
+
+    private var rounds: [ConvoRound] {
+        let perLane = Dictionary(uniqueKeysWithValues: app.live.laneIndices.map { lane in
+            (lane, splitRounds(app.live.runs[lane].turns))
+        })
+        let maxCount = max(1, perLane.values.map(\.count).max() ?? 0)
+        return (0..<maxCount).map { idx in
+            var turns: [Int: [Turn]] = [:]
+            for lane in app.live.laneIndices {
+                turns[lane] = perLane[lane]?.indices.contains(idx) == true ? perLane[lane]![idx] : []
+            }
+            return ConvoRound(index: idx, turns: turns)
+        }
+    }
+
+    private func splitRounds(_ turns: [Turn]) -> [[Turn]] {
+        var groups: [[Turn]] = [[]]
+        for turn in turns {
+            if turn.kind == .user {
+                groups.append([turn])
+            } else {
+                groups[groups.count - 1].append(turn)
+            }
+        }
+        return groups
+    }
+}
+
+private struct ConvoRound: Identifiable {
+    let index: Int
+    let turns: [Int: [Turn]]
+    var id: Int { index }
+}
+
+private struct ConvoLaneHeader: View {
+    let run: RunResult
+    let cfg: AgentConfig
+    let lane: Int
+
+    var body: some View {
+        HStack {
+            AgentTag(agentId: cfg.agentId, model: cfg.model, lane: lane)
+            Spacer(minLength: 8)
+            statusView
+        }
+        .padding(.horizontal, 16).padding(.vertical, 13)
+    }
+
+    @ViewBuilder private var statusView: some View {
+        switch run.status {
+        case .running: StatusPill(kind: .running, text: "运行中", spinning: true)
+        case .done:    StatusPill(kind: .done, text: "完成 · \(Fmt.sec(run.metrics.latencyMs))")
+        case .failed:  StatusPill(kind: .failed, text: "失败")
+        case .pending: StatusPill(kind: .idle, text: "待运行")
+        }
+    }
+}
+
+private struct ConvoRoundCell: View {
+    @EnvironmentObject var app: AppState
+    @Environment(\.density) private var density
+    let turns: [Turn]
+    let run: RunResult
+    let lane: Int
+    let isFirstRound: Bool
+    let isLastRound: Bool
+
+    private var visibleTurns: [Turn] {
+        app.prefs.showThinking ? turns : turns.filter { $0.kind != .think }
+    }
+    private var working: Bool { run.status == .running }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: density.turnGap) {
+            if isFirstRound, let err = run.error, run.status == .failed {
+                errorBox(err)
+            }
+            if isFirstRound, run.turns.isEmpty, !working, run.error == nil {
+                EmptyState(icon: "read", title: "无转录记录",
+                           message: "这次运行没有产生可显示的对话步骤")
+            }
+            ForEach(visibleTurns) { turn in
+                TurnView(turn: turn, lane: lane)
+            }
+            if isLastRound, working {
+                HStack(spacing: 8) {
+                    Spinner(size: 14)
+                    TypingDots()
+                }
+                .padding(.top, 2)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .topLeading)
+        .padding(.horizontal, density.colGap / 2)
+    }
+
+    private func errorBox(_ err: String) -> some View {
+        Text(err)
+            .font(Theme.mono(11.5))
+            .foregroundStyle(Theme.bad)
+            .textSelection(.enabled)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(11)
+            .background(Theme.delBG)
+            .clipShape(RoundedRectangle(cornerRadius: Theme.rSm))
     }
 }
 
